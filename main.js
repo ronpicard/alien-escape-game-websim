@@ -13,8 +13,21 @@ let currentForwardSpeed = initialForwardSpeed;
 const strafeSpeed = 0.5;
 const planeWidth = 25;
 const planeHeight = 15;
-const initialCloudCount = 15; 
+const initialCloudCount = 15;
 const targetCloudCount = 20; 
+const cloudSpawnThreshold = 15; 
+const cloudSpawnDistance = 1500; 
+const cloudSpawnRangeZ = 1000; 
+const cloudVerticalSpawnRangeMultiplier = 2.5; 
+
+// Add tank dimensions/constants
+const tankBodyWidth = 2;
+const tankBodyLength = 3;
+const tankBodyHeight = 1;
+const tankTurretRadius = 0.6;
+const tankTurretHeight = 0.5;
+const tankBarrelLength = 2.5;
+const tankBarrelRadius = 0.15;
 
 let score = 0;
 let coinCount = 0;
@@ -50,16 +63,17 @@ let ground;
 let moon = null; 
 let moonSpawned = false; 
 let lastPlanetSpawnDistance = ZONE_SPACE_START; 
-let lastStarDestroyerSpawnDistance = ZONE_SPACE_START; 
+let lastLargeShipSpawnDistance = ZONE_SPACE_START; 
 
 function init() {
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xADD8E6, 150, 1000); 
-    scene.background = new THREE.Color(0xADD8E6); 
+    const initialBgColor = new THREE.Color(0x87CEEB); 
+    scene.fog = new THREE.Fog(initialBgColor, 150, 1000); 
+    scene.background = initialBgColor; 
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000); 
-    camera.position.set(0, 5, 10); // Adjusted initial Z slightly to match new zoom
-    camera.lookAt(0, 2, 0); 
+    camera.position.set(0, 5, 10); 
+    camera.lookAt(0, 5, 0); 
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -289,6 +303,54 @@ function createParachutist() {
     return group;
 }
 
+function createTank() {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshPhongMaterial({ color: 0x336633, shininess: 15 }); // Dark green
+    const detailMat = new THREE.MeshPhongMaterial({ color: 0x444444, shininess: 10 }); // Dark grey for details
+
+    // Body
+    const bodyGeom = new THREE.BoxGeometry(tankBodyWidth, tankBodyHeight, tankBodyLength);
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    body.position.y = tankBodyHeight / 2; // Sit on the ground
+    group.add(body);
+
+    // Turret Base
+    const turretGeom = new THREE.CylinderGeometry(tankTurretRadius, tankTurretRadius * 0.9, tankTurretHeight, 16);
+    const turret = new THREE.Mesh(turretGeom, bodyMat);
+    turret.position.y = tankBodyHeight + tankTurretHeight / 2;
+    group.add(turret);
+
+    // Barrel
+    const barrelGeom = new THREE.CylinderGeometry(tankBarrelRadius, tankBarrelRadius * 0.8, tankBarrelLength, 8);
+    const barrel = new THREE.Mesh(barrelGeom, detailMat);
+    barrel.rotation.x = Math.PI / 2; // Point forward
+    // Position barrel at the front of the turret
+    barrel.position.y = tankBodyHeight + tankTurretHeight * 0.7; // Align vertically with turret
+    barrel.position.z = tankBarrelLength / 2; // Extend forward from turret center
+    group.add(barrel);
+
+    // Tracks (Simplified as boxes on the sides)
+    const trackHeight = tankBodyHeight * 0.7;
+    const trackWidth = tankBodyWidth * 0.2;
+    const trackLength = tankBodyLength * 1.1; // Slightly longer than body
+    const trackGeom = new THREE.BoxGeometry(trackWidth, trackHeight, trackLength);
+    const trackMat = new THREE.MeshPhongMaterial({ color: 0x222222 }); // Very dark grey/black
+
+    const trackLeft = new THREE.Mesh(trackGeom, trackMat);
+    trackLeft.position.set(-(tankBodyWidth / 2 + trackWidth / 2), trackHeight / 2, 0);
+    group.add(trackLeft);
+
+    const trackRight = new THREE.Mesh(trackGeom, trackMat);
+    trackRight.position.set(tankBodyWidth / 2 + trackWidth / 2, trackHeight / 2, 0);
+    group.add(trackRight);
+
+    group.scale.set(1.3, 1.3, 1.3); // Make it a bit larger
+    group.userData.type = 'tank';
+    // Estimate bounding box or radius later - for now, rely on Box3 calculation
+    group.userData.boundingRadius = Math.max(tankBodyWidth, tankBodyLength) * 0.7 * group.scale.x; // Approximate radius
+    return group;
+}
+
 function createSatellite() {
     const group = new THREE.Group();
     const bodyMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 60 });
@@ -325,6 +387,35 @@ function createSatellite() {
     return group;
 }
 
+function createAsteroid() {
+    const group = new THREE.Group();
+    const radius = (Math.random() * 1.5 + 0.5) * 0.8; 
+    const asteroidGeometry = new THREE.IcosahedronGeometry(radius, 1); 
+
+    const positionAttribute = asteroidGeometry.getAttribute('position');
+    const vertices = [];
+    for (let i = 0; i < positionAttribute.count; i++) {
+        const vertex = new THREE.Vector3().fromBufferAttribute(positionAttribute, i);
+        vertex.multiplyScalar(1 + (Math.random() - 0.5) * 0.4); 
+        vertices.push(vertex.x, vertex.y, vertex.z);
+    }
+    asteroidGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    asteroidGeometry.computeVertexNormals(); 
+
+    const asteroidMaterial = new THREE.MeshPhongMaterial({
+        color: new THREE.Color().setHSL(0.05, 0.2, Math.random() * 0.3 + 0.3), 
+        shininess: 5,
+        flatShading: true 
+    });
+    const asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
+    group.add(asteroid);
+
+    group.scale.set(0.9, 0.9, 0.9); 
+    group.userData.type = 'asteroid';
+    group.userData.boundingRadius = radius * 1.2 * group.scale.x; 
+    return group;
+}
+
 function createAlienSaucer(color = Math.random() * 0xffffff, size = (Math.random() * 0.4 + 0.6) * 0.8 ) { 
     const ufoGroup = new THREE.Group();
 
@@ -353,35 +444,6 @@ function createAlienSaucer(color = Math.random() * 0xffffff, size = (Math.random
     ufoGroup.userData.type = 'aliensaucer';
     ufoGroup.userData.boundingRadius = 1.5 * size * ufoGroup.scale.x * 1.1; 
     return ufoGroup;
-}
-
-function createAsteroid() {
-    const group = new THREE.Group();
-    const radius = (Math.random() * 1.5 + 0.5) * 0.8; 
-    const asteroidGeometry = new THREE.IcosahedronGeometry(radius, 1); 
-
-    const positionAttribute = asteroidGeometry.getAttribute('position');
-    const vertices = [];
-    for (let i = 0; i < positionAttribute.count; i++) {
-        const vertex = new THREE.Vector3().fromBufferAttribute(positionAttribute, i);
-        vertex.multiplyScalar(1 + (Math.random() - 0.5) * 0.4); 
-        vertices.push(vertex.x, vertex.y, vertex.z);
-    }
-    asteroidGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    asteroidGeometry.computeVertexNormals(); 
-
-    const asteroidMaterial = new THREE.MeshPhongMaterial({
-        color: new THREE.Color().setHSL(0.05, 0.2, Math.random() * 0.3 + 0.3), 
-        shininess: 5,
-        flatShading: true 
-    });
-    const asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
-    group.add(asteroid);
-
-    group.scale.set(0.9, 0.9, 0.9); 
-    group.userData.type = 'asteroid';
-    group.userData.boundingRadius = radius * 1.2 * group.scale.x; 
-    return group;
 }
 
 function createCoin() {
@@ -453,13 +515,14 @@ function createMoon() {
 
 function createBlackHole() {
     const group = new THREE.Group();
-    const holeRadius = 80 * 4; 
-    const accretionDiskOuter = holeRadius * 3; 
-    const accretionDiskInner = holeRadius * 1.1; 
+    // Increase the base radius significantly
+    const holeRadius = 80 * 16; // Was 80 * 4
+    const accretionDiskOuter = holeRadius * 3; // Scales with holeRadius
+    const accretionDiskInner = holeRadius * 1.1; // Scales with holeRadius
 
     const diskGeom = new THREE.RingGeometry(accretionDiskInner, accretionDiskOuter, 64);
     const diskMat = new THREE.MeshBasicMaterial({
-        color: 0xffaa00, 
+        color: 0xffaa00,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.8
@@ -467,59 +530,64 @@ function createBlackHole() {
     const disk = new THREE.Mesh(diskGeom, diskMat);
     disk.rotation.x = Math.PI / 2;
     group.add(disk);
+    // Keep track of the disk for animation
+    group.userData.disk = disk;
 
+    // Use 0.9 * holeRadius for the central sphere to ensure it's slightly smaller than the inner disk edge
     const centerGeom = new THREE.SphereGeometry(holeRadius * 0.9, 32, 16);
     const centerMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
     const center = new THREE.Mesh(centerGeom, centerMat);
     group.add(center);
+    // Keep track of the center for animation
+    group.userData.center = center;
 
-    group.position.set(0, planeHeight / 2, -1000); 
+
+    // Adjust Z position if needed, based on new size, maybe push it further back
+    group.position.set(0, planeHeight / 2, -2000); // Pushed further back from -1000
     group.userData.type = 'blackhole';
-    group.userData.holeRadius = holeRadius; 
-    group.userData.diskInnerRadius = accretionDiskInner; 
+    group.userData.holeRadius = holeRadius;
+    group.userData.diskInnerRadius = accretionDiskInner;
     return group;
 }
 
-function createHouse() {
+function createDeathStar() {
     const group = new THREE.Group();
-    const baseHeight = Math.random() * 1.5 + 1.5; 
-    const baseWidth = Math.random() * 2.5 + 2.0;
-    const baseDepth = Math.random() * 1.5 + 1.5;
-    const wallColor = new THREE.Color().setHSL(Math.random(), 0.6, 0.7);
-    const roofColor = new THREE.Color().setHSL(Math.random() * 0.1 + 0.05, 0.4, 0.4);
+    const mainColor = 0x999999;
+    const dishColor = 0x555555;
+    const mat = new THREE.MeshPhongMaterial({ color: mainColor, shininess: 10 });
+    const dishMat = new THREE.MeshPhongMaterial({ color: dishColor, shininess: 5 });
 
-    const baseGeom = new THREE.BoxGeometry(baseWidth, baseHeight, baseDepth);
-    const baseMat = new THREE.MeshLambertMaterial({ color: wallColor });
-    const base = new THREE.Mesh(baseGeom, baseMat);
-    base.position.y = baseHeight / 2; 
-    group.add(base);
+    const radius = 250; // Significantly larger than star destroyer parts
 
-    const roofHeight = baseHeight * (0.6 + Math.random() * 0.4); 
-    const roofGeom = new THREE.ConeGeometry(baseWidth * 0.7, roofHeight, 4);
-    const roofMat = new THREE.MeshLambertMaterial({ color: roofColor });
-    const roof = new THREE.Mesh(roofGeom, roofMat);
-    roof.position.y = baseHeight + roofHeight / 2;
-    roof.rotation.y = Math.PI / 4;
-    group.add(roof);
+    // Main sphere
+    const sphereGeom = new THREE.SphereGeometry(radius, 48, 32);
+    const sphere = new THREE.Mesh(sphereGeom, mat);
+    group.add(sphere);
 
-    group.userData.type = 'house';
-    return group;
-}
+    // Superlaser dish (simplified as an indented circle/sphere cap)
+    const dishRadius = radius * 0.3;
+    const dishDepth = radius * 0.15; // How much it's indented
+    const dishGeom = new THREE.SphereGeometry(dishRadius, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+    const dish = new THREE.Mesh(dishGeom, dishMat);
 
-function createBuilding() {
-    const group = new THREE.Group();
-    const height = Math.random() * 8 + 5; 
-    const width = Math.random() * 3 + 2.5;
-    const depth = Math.random() * 3 + 2.5;
-    const buildingColor = new THREE.Color().setHSL(0.1, 0.1, Math.random() * 0.3 + 0.4);
+    // Position the dish on the surface (e.g., along the positive Z axis relative to the sphere center)
+    // We need to calculate the position so the base of the cap aligns with the main sphere surface
+    // and rotate it to face outwards.
+    const dishPositionOffset = radius - dishDepth / 2; // Approximate placement
+    dish.position.set(0, radius * 0.3, dishPositionOffset * 0.8); // Place it slightly off-center vertically and forward
+    dish.lookAt(0, 0, radius * 1.5); // Point slightly outwards
+    dish.scale.y = 0.5; // Flatten the dish slightly
+    group.add(dish);
 
-    const geom = new THREE.BoxGeometry(width, height, depth);
-    const mat = new THREE.MeshLambertMaterial({ color: buildingColor });
-    const building = new THREE.Mesh(geom, mat);
-    building.position.y = height / 2; 
-    group.add(building);
+    // Add a subtle trench line (simplified)
+    const trenchGeom = new THREE.TorusGeometry(radius * 1.01, 2, 8, 64); // Thin torus slightly outside the sphere
+    const trenchMat = new THREE.MeshBasicMaterial({ color: 0x444444 });
+    const trench = new THREE.Mesh(trenchGeom, trenchMat);
+    trench.rotation.x = Math.PI / 2; // Align with equator
+    group.add(trench);
 
-    group.userData.type = 'building';
+    group.scale.set(1.0, 1.0, 1.0); // Scale if needed, already quite large
+    group.userData.type = 'deathstar'; // Specific type
     return group;
 }
 
@@ -594,46 +662,51 @@ function createStarDestroyer() {
 }
 
 function startGame(invincibleMode = false) {
-    if (gameActive && !gameWon) return; 
+    if (gameActive && !gameWon) return;
 
-    score = 0; 
-    coinCount = 0; 
-    currentForwardSpeed = initialForwardSpeed; 
-    ufo.position.set(0, 5, 0); 
-    ufo.rotation.set(0, 0, 0); 
+    score = 0;
+    coinCount = 0;
+    currentForwardSpeed = initialForwardSpeed;
+    ufo.position.set(0, 5, 0);
+    ufo.rotation.set(0, 0, 0);
     gameWon = false;
     moonSpawned = false;
-    isInvincible = invincibleMode; 
-    lastPlanetSpawnDistance = ZONE_SPACE_START; 
-    lastStarDestroyerSpawnDistance = ZONE_SPACE_START; 
+    isInvincible = invincibleMode;
+    lastPlanetSpawnDistance = ZONE_SPACE_START;
+    lastLargeShipSpawnDistance = ZONE_SPACE_START;
 
-    obstacles.forEach(obj => scene.remove(obj)); 
+    obstacles.forEach(obj => scene.remove(obj));
     obstacles = [];
-    coins.forEach(coin => scene.remove(coin)); 
+    coins.forEach(coin => scene.remove(coin));
     coins = [];
-    scenery.forEach(item => scene.remove(item)); 
+    scenery.forEach(item => {
+        scene.remove(item);
+        item.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } })
+    });
     scenery = [];
-    clouds.forEach(cloud => scene.remove(cloud)); 
+    clouds.forEach(cloud => scene.remove(cloud));
     clouds = [];
     if (blackHole) scene.remove(blackHole);
     blackHole = null;
-    if (moon) scene.remove(moon); 
+    if (moon) scene.remove(moon);
     moon = null;
 
     ground.position.z = -4500;
-    ground.visible = true; 
+    ground.visible = true;
 
-    scene.background.setHex(0xADD8E6); 
-    scene.fog = new THREE.Fog(0xADD8E6, 150, 1000); 
+    // Reset background and fog to initial sky blue
+    const initialBgColor = new THREE.Color(0x87CEEB);
+    scene.background.set(initialBgColor);
+    scene.fog = new THREE.Fog(initialBgColor, 150, 1000);
 
-    createInitialClouds(); 
+    createInitialClouds();
 
     gameActive = true;
-    messageContainer.style.display = 'none'; 
+    messageContainer.style.display = 'none';
     infoElement.textContent = `Height: 0 m`;
     coinsElement.textContent = `Coins: 0`;
-    speedElement.textContent = `Speed: ${Math.floor(currentForwardSpeed)} m/s`; 
-    zoneDisplayElement.textContent = 'Zone: Ground Level'; 
+    speedElement.textContent = `Speed: ${Math.floor(currentForwardSpeed)} m/s`;
+    zoneDisplayElement.textContent = 'Zone: Ground Level';
 
     // Set and show mode display text
     if (isInvincible) {
@@ -641,7 +714,7 @@ function startGame(invincibleMode = false) {
     } else {
         modeDisplayElement.textContent = 'Avoid the obstacles!';
     }
-    modeDisplayElement.style.display = 'block'; 
+    modeDisplayElement.style.display = 'block';
 
     clock.start();
     animate();
@@ -649,15 +722,15 @@ function startGame(invincibleMode = false) {
 
 function createCloud() {
     const group = new THREE.Group();
-    const puffCount = Math.floor(Math.random() * 3) + 3; 
+    const puffCount = Math.floor(Math.random() * 3) + 3;
     const cloudMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.7 + Math.random() * 0.2 
+        opacity: 0.6 + Math.random() * 0.2
     });
 
     for (let i = 0; i < puffCount; i++) {
-        const puffSize = Math.random() * 10 + 8; 
+        const puffSize = Math.random() * 10 + 8;
         const puffGeom = new THREE.SphereGeometry(puffSize, 8, 6);
         const puff = new THREE.Mesh(puffGeom, cloudMat);
         puff.position.set(
@@ -668,18 +741,44 @@ function createCloud() {
         group.add(puff);
     }
     group.userData.type = 'cloud';
-    group.userData.driftSpeed = Math.random() * 0.1 + 0.05; 
-    group.userData.direction = Math.random() > 0.5 ? 1 : -1;
+    group.userData.driftSpeed = (Math.random() * 0.1 + 0.05) * (Math.random() > 0.5 ? 1 : -1);
     return group;
+}
+
+function spawnCloud(forceAhead = false) {
+    // Add check to stop spawning clouds in space
+    if (score >= ZONE_SPACE_START) {
+        return;
+    }
+
+    const cloud = createCloud();
+    const spawnZ = ufo.position.z - cloudSpawnDistance - (Math.random() * cloudSpawnRangeZ);
+    const spawnX = (Math.random() - 0.5) * planeWidth * 3;
+
+    // Adjust vertical spawn based on current height, but keep them possible everywhere
+    const baseCloudHeight = planeHeight * 0.5;
+    const heightVariance = planeHeight * cloudVerticalSpawnRangeMultiplier;
+    const currentHeightInfluence = Math.max(1, score / 2000);
+    const spawnY = baseCloudHeight + (Math.random() * heightVariance * currentHeightInfluence) + 1;
+
+
+    cloud.position.set(spawnX, spawnY, spawnZ);
+
+    if (forceAhead && spawnZ > ufo.position.z - 100) {
+        cloud.position.z = ufo.position.z - 100 - Math.random() * cloudSpawnDistance;
+    }
+
+    clouds.push(cloud);
+    scene.add(cloud);
 }
 
 function createInitialClouds() {
     for (let i = 0; i < initialCloudCount; i++) {
         const cloud = createCloud();
         cloud.position.set(
-            (Math.random() - 0.5) * planeWidth * 2,
-            (Math.random() * planeHeight) + 2,
-            (Math.random() * -2000) - 2000
+            (Math.random() - 0.5) * planeWidth * 2.5,
+            (Math.random() * planeHeight * 1.5) + 2,
+            (Math.random() * -3000) - 1000
         );
         scene.add(cloud);
         clouds.push(cloud);
@@ -688,67 +787,77 @@ function createInitialClouds() {
 
 function spawnObstacle(forceAhead = false) {
     let obstacle;
-    const currentDistance = score; 
+    const currentDistance = score;
     let spawnY;
     let isGroundObstacle = false;
 
-    if (currentDistance < ZONE_AIR_END) { 
+    // Ground Level / Lower Atmosphere Obstacles
+    if (currentDistance < ZONE_AIR_END) {
         const type = Math.random();
-        if (type < 0.25) {
+        if (type < 0.18) { // Reduced chance for house
             obstacle = createHouse();
             isGroundObstacle = true;
-        } else if (type < 0.5) {
+        } else if (type < 0.36) { // Reduced chance for building
             obstacle = createBuilding();
             isGroundObstacle = true;
-        } else if (type < 0.7) {
+        } else if (type < 0.54) { // Added tanks
+            obstacle = createTank();
+            isGroundObstacle = true;
+        } else if (type < 0.72) { // Adjusted airplane chance
             obstacle = createAirplane();
-            spawnY = (Math.random() * planeHeight * 0.8) + 3; 
-        } else if (type < 0.85) {
+            spawnY = (Math.random() * planeHeight * 0.8) + 3;
+        } else if (type < 0.88) { // Adjusted helicopter chance
             obstacle = createHelicopter();
             spawnY = (Math.random() * planeHeight * 0.8) + 3;
-        } else {
+        } else { // Adjusted parachutist chance
             obstacle = createParachutist();
             spawnY = (Math.random() * planeHeight * 0.9) + 2;
         }
-    } else if (currentDistance < ZONE_SPACE_START) { 
+    // Upper Atmosphere / Lower Space Transition
+    } else if (currentDistance < ZONE_SPACE_START) {
         const type = Math.random();
         if (type < 0.5) obstacle = createAirplane();
         else if (type < 0.8) obstacle = createHelicopter();
         else obstacle = createParachutist();
-        spawnY = (Math.random() * planeHeight * 1.2) + 2; 
-    } else if (currentDistance < ZONE_NEAR_SPACE_END) { 
+        spawnY = (Math.random() * planeHeight * 1.2) + 2;
+    // Near Space
+    } else if (currentDistance < ZONE_NEAR_SPACE_END) {
         obstacle = Math.random() < 0.6 ? createSatellite() : createAsteroid();
-        spawnY = (Math.random() * planeHeight * 1.5) + 1; 
-    } else if (currentDistance < ZONE_MID_SPACE_END) { 
-         obstacle = Math.random() < 0.5 ? createAlienSaucer() : createAsteroid();
-         spawnY = (Math.random() * planeHeight * 1.8); 
-    } else { 
+        spawnY = (Math.random() * planeHeight * 1.5) + 1;
+    // Mid Space
+    } else if (currentDistance < ZONE_MID_SPACE_END) {
+        obstacle = Math.random() < 0.5 ? createAlienSaucer() : createAsteroid();
+        spawnY = (Math.random() * planeHeight * 1.8);
+    // Deep Space
+    } else {
         obstacle = Math.random() < 0.6 ? createAlienSaucer() : createAsteroid();
         spawnY = (Math.random() * planeHeight * 2.0);
     }
 
-    const spawnDistanceForward = 600 + Math.random() * 400; 
+    const spawnDistanceForward = 600 + Math.random() * 400;
     const spawnZ = ufo.position.z - spawnDistanceForward;
-    const spawnX = (Math.random() - 0.5) * planeWidth * 2.5; 
+    const spawnX = (Math.random() - 0.5) * planeWidth * 2.5;
 
     if (isGroundObstacle) {
-        obstacle.position.set(spawnX, 0, spawnZ);
-        obstacle.rotation.set(0, Math.random() * Math.PI * 2, 0);
+        obstacle.position.set(spawnX, 0, spawnZ); // Set y to 0 for ground obstacles
+        obstacle.rotation.set(0, Math.random() * Math.PI * 2, 0); // Random rotation around Y
     } else {
         obstacle.position.set(spawnX, spawnY, spawnZ);
         obstacle.rotation.set(
-            Math.random() * Math.PI * 0.5 - Math.PI * 0.25, 
+            Math.random() * Math.PI * 0.5 - Math.PI * 0.25,
             Math.random() * Math.PI * 2,
             Math.random() * Math.PI * 0.5 - Math.PI * 0.25
         );
     }
 
-    if (forceAhead && spawnZ > ufo.position.z - 150) { 
+    // Force spawn ahead logic remains the same
+    if (forceAhead && spawnZ > ufo.position.z - 150) {
         obstacle.position.z = ufo.position.z - 150 - Math.random() * 250;
     }
 
-    obstacle.userData.boundingBox = new THREE.Box3(); 
-    obstacle.userData.boundingRadius = null; 
+    obstacle.userData.boundingBox = new THREE.Box3();
+    // Clear boundingRadius if we want to rely solely on Box3 (might be more accurate for complex shapes)
+    // obstacle.userData.boundingRadius = null; // Optional: Uncomment if you prefer Box3 only
 
     obstacles.push(obstacle);
     scene.add(obstacle);
@@ -760,12 +869,12 @@ function spawnCoin(forceAhead = false) {
     const spawnDistanceForward = 600 + Math.random() * 500;
     const spawnZ = ufo.position.z - spawnDistanceForward;
 
-    const spawnX = (Math.random() - 0.5) * planeWidth * 1.5; 
-    const spawnY = (Math.random() * (planeHeight * 1.2)) + 1; 
+    const spawnX = (Math.random() - 0.5) * planeWidth * 1.5;
+    const spawnY = (Math.random() * (planeHeight * 1.2)) + 1;
 
     coin.position.set(spawnX, spawnY, spawnZ);
 
-    if (forceAhead && spawnZ > ufo.position.z - 50) { 
+    if (forceAhead && spawnZ > ufo.position.z - 50) {
         coin.position.z = ufo.position.z - 50 - Math.random() * 150;
     }
 
@@ -774,27 +883,40 @@ function spawnCoin(forceAhead = false) {
 }
 
 function updateObstacles() {
-    const removalDistanceBehind = 100; 
-    const targetObstacleCount = 20; 
+    const removalDistanceBehind = 100;
+    const targetObstacleCount = 20;
     const spawnThreshold = targetObstacleCount - 5;
 
     obstacles = obstacles.filter(obstacle => {
         if (obstacle.position.z > ufo.position.z + removalDistanceBehind) {
             scene.remove(obstacle);
-            obstacle.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } });
-            return false; 
+            obstacle.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } })
+            return false;
         }
-        if (obstacle.userData.boundingBox && obstacle.visible) {
-            try {
-                obstacle.userData.boundingBox.setFromObject(obstacle, true); 
-            } catch (e) {
-                console.warn("Could not set bounding box for obstacle:", obstacle.userData.type, e);
+        // Ensure bounding box exists before trying to set from object
+        if (!obstacle.userData.boundingBox) {
+            obstacle.userData.boundingBox = new THREE.Box3();
+            // Try setting it once here if it was missing
+            try { obstacle.userData.boundingBox.setFromObject(obstacle, true); } catch (e) {}
+        } else if (obstacle.visible) {
+            // Update existing bounding box
+            try { obstacle.userData.boundingBox.setFromObject(obstacle, true); } catch (e) {}
+        }
+        // Check if bounding box is still valid (e.g., not Infinity)
+        if (obstacle.userData.boundingBox && !obstacle.userData.boundingBox.isEmpty() && isFinite(obstacle.userData.boundingBox.min.x)) {
+            // Box is valid
+        } else {
+            // Bounding box invalid or failed to compute, maybe use radius as fallback if available
+            if (!obstacle.userData.boundingRadius) {
+                // If no radius either, estimate based on geometry or position (less accurate)
+                // console.warn("Obstacle missing valid bounds:", obstacle.userData.type);
             }
         }
-        return true; 
+
+        return true;
     });
 
-    let activeObstacles = obstacles.filter(o => o.position.z < ufo.position.z).length; 
+    let activeObstacles = obstacles.filter(o => o.position.z < ufo.position.z).length;
     if (activeObstacles < spawnThreshold) {
         const needed = targetObstacleCount - activeObstacles;
         for (let i = 0; i < needed; i++) {
@@ -804,8 +926,8 @@ function updateObstacles() {
 }
 
 function updateCoins(delta) {
-    const removalDistanceBehind = 50; 
-    const targetCoinCount = 15; 
+    const removalDistanceBehind = 50;
+    const targetCoinCount = 15;
     const spawnThreshold = targetCoinCount - 5;
 
     coins = coins.filter(coin => {
@@ -814,7 +936,7 @@ function updateCoins(delta) {
             coin.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } })
             return false;
         }
-        coin.rotation.y += 4 * delta; 
+        coin.rotation.y += 4 * delta;
         return true;
     });
 
@@ -826,149 +948,210 @@ function updateCoins(delta) {
     }
 }
 
-function updateScenery() {
-    const currentDistance = score; 
-    const sceneryRemovalDistance = 10000; 
-    const planetSpawnInterval = 400; 
-    const starDestroyerSpawnInterval = 2000; 
+function updateClouds(delta) {
+    const removalDistanceBehind = 200;
 
-    if (!moonSpawned && currentDistance > ZONE_SPACE_START) {
+    // If in space, remove all existing clouds and stop processing
+    if (score >= ZONE_SPACE_START) {
+        if (clouds.length > 0) {
+            clouds.forEach(cloud => {
+                scene.remove(cloud);
+                cloud.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } });
+            });
+            clouds = []; // Clear the array
+        }
+        return; // Don't process or spawn new clouds
+    }
+
+    clouds = clouds.filter(cloud => {
+        if (cloud.position.z > ufo.position.z + removalDistanceBehind) {
+            scene.remove(cloud);
+            cloud.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } });
+            return false;
+        }
+        // Add subtle drift
+        cloud.position.x += cloud.userData.driftSpeed * delta;
+
+        return true;
+    });
+
+    // Check if we need to spawn more clouds (only if not in space)
+    let activeClouds = clouds.filter(c => c.position.z < ufo.position.z).length;
+    if (activeClouds < cloudSpawnThreshold) {
+        const needed = targetCloudCount - activeClouds;
+        for (let i = 0; i < needed; i++) {
+            spawnCloud(); // spawnCloud already checks if we are in space
+        }
+    }
+}
+
+function updateScenery() {
+    const currentDistance = score;
+    const sceneryRemovalDistance = 25000; // Increased significantly for giant black hole
+    const planetSpawnInterval = 400;
+    const largeShipSpawnInterval = 90; // Controls frequency of *either* Star Destroyer or Death Star
+    const deathStarSpawnChance = 0.2; // 20% chance a large ship spawn is a Death Star
+
+    // Moon spawning logic remains the same...
+    if (!moonSpawned && currentDistance > ZONE_NEAR_SPACE_END * 0.8) { // Spawn moon earlier relative to near space end
         moon = createMoon();
-        const sideOffset = (planeWidth * 5) + Math.random() * 500;
-        const vertOffset = (planeHeight * 3) + Math.random() * 300;
-        const forwardDist = 3000 + Math.random() * 1000;
+        const sideOffset = planeWidth * 4 + Math.random() * 500;
+        const vertOffset = planeHeight * 4 + Math.random() * 500;
+        const forwardDist = 3000 + Math.random() * 1500;
         moon.position.set(
             (Math.random() > 0.5 ? 1 : -1) * sideOffset,
             (Math.random() > 0.5 ? 1 : -1) * vertOffset,
             ufo.position.z - forwardDist
         );
-        moon.lookAt(camera.position); 
+        moon.lookAt(ufo.position); // Make it face the player initially
+        scenery.push(moon);
         scene.add(moon);
-        scenery.push(moon); 
         moonSpawned = true;
     }
 
+
     scenery = scenery.filter(item => {
         const itemType = item.userData.type;
-        const removalDist = (itemType === 'planet' || itemType === 'moon' || itemType === 'stardestroyer') ? sceneryRemovalDistance : 500; 
+        // Make sure large scenery uses the larger removal distance
+        const removalDist = (itemType === 'planet' || itemType === 'moon' || itemType === 'stardestroyer' || itemType === 'deathstar' || itemType === 'blackhole') ? sceneryRemovalDistance : 500;
 
         if (item.position.z > ufo.position.z + removalDist) {
-           scene.remove(item);
-           item.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } })
-           return false;
+            scene.remove(item);
+            item.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } })
+            return false;
         }
 
+        // Existing rotation/movement
         if (itemType === 'planet') {
-           item.rotation.y += 0.0005;
-           const ring = item.children.find(c => c.geometry instanceof THREE.RingGeometry);
-           if (ring) ring.rotation.z -= 0.0008;
+            item.rotation.y += 0.0002;
+            item.rotation.x += 0.0001;
         } else if (itemType === 'stardestroyer') {
-            item.position.x += (Math.random() - 0.5) * 0.1;
-            item.rotation.y += (Math.random() - 0.5) * 0.0001;
+             // No specific movement needed, they just exist
+        } else if (itemType === 'deathstar') {
+            item.rotation.y += 0.0001;
+            item.rotation.x += 0.00005;
+        } else if (itemType === 'moon' && moon) {
+            // Optional: Add very slow rotation to the moon
+            item.rotation.y += 0.0003;
         }
 
-        return true; 
+        return true;
     });
 
+    // Planet and Large Ship Spawning Logic
     if (currentDistance > ZONE_SPACE_START) {
+        // Planet spawning
         const distanceSinceLastPlanet = currentDistance - lastPlanetSpawnDistance;
-        if (distanceSinceLastPlanet > planetSpawnInterval && scenery.filter(s => s.userData.type === 'planet' && s.position.z < ufo.position.z - 1000).length < 8) { 
-             const planet = createPlanet();
-             const sideOffset = (planeWidth * 6) + Math.random() * 1500; 
-             const vertOffset = (planeHeight * 6) + Math.random() * 1500; 
-             const forwardDist = 4000 + Math.random() * 3000; 
+        // Ensure planets don't spawn too close to the final approach zone
+        if (currentDistance < ZONE_WIN - 10000 && distanceSinceLastPlanet > planetSpawnInterval && scenery.filter(s => s.userData.type === 'planet' && s.position.z < ufo.position.z - 1000).length < 8) {
+            const planet = createPlanet();
+            const sideOffset = (planeWidth * 6) + Math.random() * 1500;
+            const vertOffset = (planeHeight * 6) + Math.random() * 1500;
+            const forwardDist = 4000 + Math.random() * 3000;
 
-             planet.position.set(
-                 (Math.random() > 0.5 ? 1 : -1) * sideOffset,
-                 (Math.random() > 0.5 ? 1 : -1) * vertOffset,
-                 ufo.position.z - forwardDist
-             );
-             scenery.push(planet);
-             scene.add(planet);
-             lastPlanetSpawnDistance = currentDistance; 
-        }
-    }
-
-    if (currentDistance > ZONE_MID_SPACE_END) { 
-        const distanceSinceLastStarDestroyer = currentDistance - lastStarDestroyerSpawnDistance;
-        if (distanceSinceLastStarDestroyer > starDestroyerSpawnInterval && scenery.filter(s => s.userData.type === 'stardestroyer' && s.position.z < ufo.position.z - 2000).length < 3) {
-            const destroyer = createStarDestroyer();
-            const sideOffset = (planeWidth * 8) + Math.random() * 2000; 
-            const vertOffset = (planeHeight * 8) + Math.random() * 2000; 
-            const forwardDist = 6000 + Math.random() * 4000; 
-
-            destroyer.position.set(
+            planet.position.set(
                 (Math.random() > 0.5 ? 1 : -1) * sideOffset,
                 (Math.random() > 0.5 ? 1 : -1) * vertOffset,
                 ufo.position.z - forwardDist
             );
-            destroyer.rotation.set(
-                (Math.random() - 0.5) * Math.PI * 0.2,
-                (Math.random() - 0.5) * Math.PI * 1.5,
-                (Math.random() - 0.5) * Math.PI * 0.2
-            );
-            destroyer.lookAt(new THREE.Vector3(
-                destroyer.position.x + (Math.random()-0.5)*500,
-                destroyer.position.y + (Math.random()-0.5)*500,
-                destroyer.position.z + (Math.random()-0.5)*500
-            )); 
+            scenery.push(planet);
+            scene.add(planet);
+            lastPlanetSpawnDistance = currentDistance;
+        }
 
-            scenery.push(destroyer);
-            scene.add(destroyer);
-            lastStarDestroyerSpawnDistance = currentDistance; 
+        // Combined Star Destroyer / Death Star Spawning
+        const distanceSinceLastLargeShip = currentDistance - lastLargeShipSpawnDistance;
+        // Ensure large ships don't spawn too close to the final approach zone
+        if (currentDistance < ZONE_WIN - 15000 && distanceSinceLastLargeShip > largeShipSpawnInterval && scenery.filter(s => (s.userData.type === 'stardestroyer' || s.userData.type === 'deathstar') && s.position.z < ufo.position.z - 2000).length < 35) {
+
+            let largeShip;
+            if (Math.random() < deathStarSpawnChance) {
+                largeShip = createDeathStar();
+            } else {
+                largeShip = createStarDestroyer();
+            }
+
+            const sideOffset = (planeWidth * 8) + Math.random() * 4000;
+            const vertOffset = (planeHeight * 8) + Math.random() * 4000;
+            const forwardDist = 7000 + Math.random() * 6000;
+
+            largeShip.position.set(
+                (Math.random() > 0.5 ? 1 : -1) * sideOffset,
+                (Math.random() > 0.5 ? 1 : -1) * vertOffset,
+                ufo.position.z - forwardDist
+            );
+            largeShip.rotation.set(
+                (Math.random() - 0.5) * Math.PI * 0.4,
+                Math.random() * Math.PI * 2,
+                (Math.random() - 0.5) * Math.PI * 0.4
+            );
+
+            scenery.push(largeShip);
+            scene.add(largeShip);
+            lastLargeShipSpawnDistance = currentDistance;
         }
     }
 
-    if (currentDistance > ZONE_WIN - 5000 && !blackHole) { 
+    // Black Hole Logic
+    // Create black hole earlier to give player more time to see it
+    if (currentDistance > ZONE_WIN - 10000 && !blackHole) { // Create earlier (was ZONE_WIN - 5000)
         blackHole = createBlackHole();
-        const remainingDistance = Math.max(0, ZONE_WIN - score); 
-        const blackHoleSpawnDepth = ufo.position.z - remainingDistance - 5000; 
-        blackHole.position.set(0, planeHeight / 2, blackHoleSpawnDepth);
+        // Position it relative to the UFO, further ahead
+        blackHole.position.z = ufo.position.z - 12000; // Position it far ahead (was -2000 relative to its creation)
+        // Center it horizontally, slightly above center vertically
+        blackHole.position.x = 0;
+        blackHole.position.y = planeHeight * 1.5; // Place it higher
+
         scene.add(blackHole);
-        blackHole.userData.disk = blackHole.children.find(c => c.geometry instanceof THREE.RingGeometry);
-        blackHole.userData.center = blackHole.children.find(c => c.geometry instanceof THREE.SphereGeometry); 
+        scenery.push(blackHole); // Add to scenery array for cleanup
     }
+    // Update black hole animation if it exists
     if (blackHole && blackHole.userData.disk) {
-         blackHole.userData.disk.rotation.z += 0.005;
-         if(blackHole.userData.center) blackHole.userData.center.rotation.y += 0.001;
+        blackHole.userData.disk.rotation.z += 0.005; // Spin accretion disk
+        if(blackHole.userData.center) blackHole.userData.center.rotation.y += 0.001; // Slowly spin center
     }
 }
 
 function checkCollisions() {
-    if (!ufo || !ufo.userData.collider) return; 
+    if (!ufo || !ufo.userData.collider || !gameActive) return;
+
+    ufo.userData.collider.updateWorldMatrix(true, false);
+    ufoBoundingBox.setFromObject(ufo.userData.collider);
 
     if (!isInvincible) {
-        ufo.userData.collider.updateWorldMatrix(true, false);
-        ufoBoundingBox.setFromObject(ufo.userData.collider);
-
         for (let i = obstacles.length - 1; i >= 0; i--) {
             const obstacle = obstacles[i];
 
-            if (obstacle.userData.boundingBox && !obstacle.userData.boundingBox.isEmpty()) {
+            // Prioritize bounding box check if valid
+            if (obstacle.userData.boundingBox && !obstacle.userData.boundingBox.isEmpty() && isFinite(obstacle.userData.boundingBox.min.x)) {
                 if (ufoBoundingBox.intersectsBox(obstacle.userData.boundingBox)) {
-                    gameOver(); 
+                    gameOver();
                     return;
                 }
-            } else if (obstacle.userData.boundingRadius) {
-                 const distance = ufo.position.distanceTo(obstacle.position);
-                 if (distance < (ufoBoundingBox.getSize(new THREE.Vector3()).length() / 2 + obstacle.userData.boundingRadius * 0.8)) { 
-                    console.log("Collision detected via sphere");
+            }
+            // Fallback to radius check if box is invalid or radius exists
+            else if (obstacle.userData.boundingRadius) {
+                const distance = ufo.position.distanceTo(obstacle.position);
+                const ufoRadius = ufoBoundingBox.getSize(new THREE.Vector3()).length() * 0.4;
+                if (distance < (ufoRadius + obstacle.userData.boundingRadius * 0.8)) {
                     gameOver();
                     return;
                 }
             }
         }
-    } 
+    }
 
+    // Check coins separately
     for (let i = coins.length - 1; i >= 0; i--) {
         const coin = coins[i];
         const distance = ufo.position.distanceTo(coin.position);
-        if (distance < 1.2 + coin.userData.boundingRadius) { 
+        const ufoRadius = ufoBoundingBox.getSize(new THREE.Vector3()).length() * 0.4;
+        if (distance < ufoRadius + coin.userData.boundingRadius * 0.9) {
             coinCount++;
             coinsElement.textContent = `Coins: ${coinCount}`;
             scene.remove(coin);
             coin.traverse(child => { if (child.isMesh) { child.geometry?.dispose(); child.material?.dispose(); } });
-            coins.splice(i, 1); 
+            coins.splice(i, 1);
         }
     }
 }
@@ -976,7 +1159,7 @@ function checkCollisions() {
 function handleInput(delta) {
     if (!gameActive) return;
 
-    const moveSpeed = strafeSpeed * delta * 60; 
+    const moveSpeed = strafeSpeed * delta * 60;
 
     let targetX = ufo.position.x;
     let targetY = ufo.position.y;
@@ -995,48 +1178,45 @@ function handleInput(delta) {
     }
 
     ufo.position.x = THREE.MathUtils.clamp(targetX, -planeWidth, planeWidth);
-    ufo.position.y = THREE.MathUtils.clamp(targetY, 1, planeHeight * 1.5); 
+    ufo.position.y = THREE.MathUtils.clamp(targetY, 1, planeHeight * 1.5);
 
     const targetBank = (keys['arrowright'] || keys['d'] ? -1 : 0) * Math.PI / 12 + (keys['arrowleft'] || keys['a'] ? 1 : 0) * Math.PI / 12;
-    ufo.rotation.z = THREE.MathUtils.lerp(ufo.rotation.z, targetBank, 0.1); 
+    ufo.rotation.z = THREE.MathUtils.lerp(ufo.rotation.z, targetBank, 0.1);
 
     const targetPitch = (keys['arrowup'] || keys['w'] ? 1 : 0) * Math.PI / 24 + (keys['arrowdown'] || keys['s'] ? -1 : 0) * Math.PI / 24;
     ufo.rotation.x = THREE.MathUtils.lerp(ufo.rotation.x, targetPitch, 0.1);
 }
 
 function updateEnvironment(distanceZ) {
-    const currentDepth = -distanceZ; 
-    const spaceTransitionStart = ZONE_SPACE_START; 
-    const spaceTransitionEnd = spaceTransitionStart + 1000; 
+    const currentDepth = -distanceZ;
+    const spaceTransitionStart = ZONE_SPACE_START;
+    const spaceTransitionEnd = spaceTransitionStart + 2000;
+    const deepSpaceStart = ZONE_NEAR_SPACE_END;
+    const deepSpaceEnd = ZONE_MID_SPACE_END;
+
+    let transitionFactor = 0;
 
     if (currentDepth > spaceTransitionStart) {
-        const transitionFactor = Math.min(1, (currentDepth - spaceTransitionStart) / (spaceTransitionEnd - spaceTransitionStart));
+        transitionFactor = Math.min(1, (currentDepth - spaceTransitionStart) / (spaceTransitionEnd - spaceTransitionStart));
+    }
 
-        const skyColor = new THREE.Color(0xADD8E6);
-        const spaceColor = new THREE.Color(0x000010);
-        const currentColor = new THREE.Color().lerpColors(skyColor, spaceColor, transitionFactor);
-        scene.background = currentColor;
+    const skyColor = new THREE.Color(0x87CEEB);
+    const spaceColor = new THREE.Color(0x000010);
+    const currentColor = new THREE.Color().lerpColors(skyColor, spaceColor, transitionFactor);
+    scene.background = currentColor;
 
-        const initialFogNear = 150;
-        const initialFogFar = 1000;
-        const spaceFogNear = 300;
-        const spaceFogFar = 2500; 
-        scene.fog.near = THREE.MathUtils.lerp(initialFogNear, spaceFogNear, transitionFactor);
-        scene.fog.far = THREE.MathUtils.lerp(initialFogFar, spaceFogFar, transitionFactor);
-        scene.fog.color.copy(currentColor);
+    const initialFogNear = 150;
+    const initialFogFar = 1000;
+    const spaceFogNear = 400;
+    const spaceFogFar = 3500;
+    scene.fog.near = THREE.MathUtils.lerp(initialFogNear, spaceFogNear, transitionFactor);
+    scene.fog.far = THREE.MathUtils.lerp(initialFogFar, spaceFogFar, transitionFactor);
+    scene.fog.color.copy(currentColor);
 
-        if (currentDepth > spaceTransitionEnd) { 
-             ground.visible = false;
-        } else {
-             ground.visible = true; 
-        }
-
+    if (currentDepth > spaceTransitionEnd) {
+        ground.visible = false;
     } else {
-        scene.background.setHex(0xADD8E6);
-        scene.fog.color.setHex(0xADD8E6);
-        scene.fog.near = 150;
-        scene.fog.far = 1000;
-        ground.visible = true; 
+        ground.visible = true;
     }
 }
 
@@ -1045,14 +1225,14 @@ function updateZoneDisplay(currentScore) {
     if (currentScore >= ZONE_WIN_APPROACH) {
         zoneName = "Approaching Singularity";
     } else if (currentScore >= ZONE_DEEP_SPACE_END) {
-        zoneName = "Deep Space"; 
+        zoneName = "Deep Space";
     } else if (currentScore >= ZONE_MID_SPACE_END) {
         zoneName = "Mid Space";
     } else if (currentScore >= ZONE_NEAR_SPACE_END) {
         zoneName = "Near Space";
     } else if (currentScore >= ZONE_SPACE_START) {
         zoneName = "Low Orbit / Exosphere";
-    } else if (currentScore >= ZONE_AIR_END / 2) { 
+    } else if (currentScore >= ZONE_AIR_END / 2) {
         zoneName = "Upper Atmosphere";
     } else if (currentScore > ZONE_GROUND) {
         zoneName = "Lower Atmosphere";
@@ -1062,26 +1242,26 @@ function updateZoneDisplay(currentScore) {
 }
 
 function winGame() {
-    if (gameWon) return; 
+    if (gameWon) return;
     gameActive = false;
     gameWon = true;
     clock.stop();
     endMessageDiv.textContent = `Congratulations!\nYou Reached the Black Hole!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}${isInvincible ? '\n(Invincible Mode)' : ''}`;
-    endMessageDiv.style.display = 'block'; 
-    startOptionsDiv.style.display = 'block'; 
-    messageContainer.style.display = 'block'; 
-    modeDisplayElement.style.display = 'none'; // Hide mode display
+    endMessageDiv.style.display = 'block';
+    startOptionsDiv.style.display = 'block';
+    messageContainer.style.display = 'block';
+    modeDisplayElement.style.display = 'none';
 }
 
 function gameOver() {
-    if (!gameActive || gameWon || isInvincible) return; 
+    if (!gameActive || gameWon || isInvincible) return;
     gameActive = false;
     clock.stop();
     endMessageDiv.textContent = `Game Over!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}`;
-    endMessageDiv.style.display = 'block'; 
-    startOptionsDiv.style.display = 'block'; 
-    messageContainer.style.display = 'block'; 
-    modeDisplayElement.style.display = 'none'; // Hide mode display
+    endMessageDiv.style.display = 'block';
+    startOptionsDiv.style.display = 'block';
+    messageContainer.style.display = 'block';
+    modeDisplayElement.style.display = 'none';
 }
 
 function animate() {
@@ -1090,67 +1270,77 @@ function animate() {
     requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
+    // Clamp delta to prevent large jumps if tab loses focus
+    const clampedDelta = Math.min(delta, 0.05); // Max delta of 50ms (20 FPS)
 
     if (currentForwardSpeed < maxSpeed) {
-        currentForwardSpeed += acceleration * delta;
-        currentForwardSpeed = Math.min(currentForwardSpeed, maxSpeed); 
+        currentForwardSpeed += acceleration * clampedDelta;
+        currentForwardSpeed = Math.min(currentForwardSpeed, maxSpeed);
     }
 
-    handleInput(delta); 
+    handleInput(clampedDelta);
 
-    ufo.position.z -= currentForwardSpeed * delta;
+    ufo.position.z -= currentForwardSpeed * clampedDelta;
 
-    score = -ufo.position.z; 
+    score = -ufo.position.z;
     infoElement.textContent = `Height: ${Math.floor(score)} m`;
     speedElement.textContent = `Speed: ${Math.floor(currentForwardSpeed)} m/s`;
-    updateZoneDisplay(score); 
+    updateZoneDisplay(score);
 
     const cameraOffsetX = 0;
-    const cameraOffsetY = 5.5; // Slightly adjusted Y offset
-    const cameraOffsetZ = 10; // Reduced Z offset to zoom in
-
+    const cameraOffsetY = 5.5;
+    const cameraOffsetZ = 10;
     const cameraTargetPosition = new THREE.Vector3(
         ufo.position.x + cameraOffsetX,
         ufo.position.y + cameraOffsetY,
         ufo.position.z + cameraOffsetZ
     );
-
-    camera.position.lerp(cameraTargetPosition, 0.1); 
-
+    camera.position.set(
+        ufo.position.x + cameraOffsetX,
+        ufo.position.y + cameraOffsetY,
+        ufo.position.z + cameraOffsetZ
+    );
     const lookAtTargetPosition = new THREE.Vector3(
         ufo.position.x,
-        ufo.position.y, 
-        ufo.position.z - 50
+        ufo.position.y,
+        ufo.position.z - 50 // Look ahead of the UFO
     );
 
+    // Camera lookAt smoothing
     const targetQuaternion = new THREE.Quaternion();
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.lookAt(camera.position, lookAtTargetPosition, camera.up);
     targetQuaternion.setFromRotationMatrix(tempMatrix);
-    camera.quaternion.slerp(targetQuaternion, 0.1); 
+    camera.quaternion.slerp(targetQuaternion, 0.1); // Use slerp for smooth rotation
 
 
     updateObstacles();
-    updateCoins(delta);
+    updateCoins(clampedDelta);
+    updateClouds(clampedDelta);
     updateScenery();
     checkCollisions();
-    if (!gameActive) return; 
+    if (!gameActive) return; // Check again after collisions
 
     updateEnvironment(ufo.position.z);
 
-    if (!gameWon && score >= ZONE_WIN) { 
+    // Win Condition Check - Check distance to black hole center
+    if (!gameWon && score >= ZONE_WIN) {
         if (blackHole && blackHole.userData.center) {
+             // Check distance to the black hole's *center position*
             const distToHoleCenter = ufo.position.distanceTo(blackHole.position);
-            if (distToHoleCenter < blackHole.userData.diskInnerRadius * 1.2) { 
-                 winGame();
-                 return; 
+            // Win when getting close to the *inner radius* of the accretion disk
+            if (blackHole.userData.diskInnerRadius && distToHoleCenter < blackHole.userData.diskInnerRadius * 1.2) { // Increased multiplier slightly
+                winGame();
+                return; // Exit animation loop
             }
-        } else if (score > ZONE_WIN + 1000) { 
-             console.warn("Reached win distance but black hole/center not found! Triggering fallback win.");
-             winGame();
-             return; 
+        } else if (score > ZONE_WIN + 5000) { // Increased fallback distance
+            // Fallback win condition if black hole object isn't found correctly
+            console.warn("Reached win distance but black hole/center not found or radii missing! Triggering fallback win.");
+            winGame();
+            return; // Exit animation loop
         }
     }
+
 
     renderer.render(scene, camera);
 }
@@ -1162,14 +1352,14 @@ function onWindowResize() {
 }
 
 function onKeyDown(event) {
-    keys[event.key.toLowerCase()] = true; 
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' '].includes(event.key.toLowerCase())) { 
+    keys[event.key.toLowerCase()] = true;
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' '].includes(event.key.toLowerCase())) {
         event.preventDefault();
     }
 }
 
 function onKeyUp(event) {
-    keys[event.key.toLowerCase()] = false; 
+    keys[event.key.toLowerCase()] = false;
 }
 
 init();
