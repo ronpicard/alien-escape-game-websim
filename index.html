@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Alien Escape!</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: 'Arial Black', Gadget, sans-serif;
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            z-index: 100;
+            white-space: nowrap; /* Prevent wrapping */
+        }
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px; /* Align to left */
+            width: auto; /* Adjust width */
+            text-align: left; /* Align text left */
+            z-index: 100;
+            display: block;
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px black; /* Add shadow for readability */
+            margin-top: 40px; /* Push down below title */
+        }
+        #info { /* Keep height display */
+            margin-bottom: 5px;
+        }
+        #coins { /* Add coin display */
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px black; /* Add shadow for readability */
+            margin-bottom: 5px; /* Add margin bottom */
+        }
+        /* Add speed display style */
+        #speed {
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px black;
+        }
+        /* Container for start buttons and end messages */
+        #message-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 101;
+            display: none; /* Hidden initially, shown by JS */
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        #start-options button {
+            font-family: monospace;
+            font-size: 24px;
+            padding: 15px 30px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+         #start-options button:hover {
+             background-color: #45a049;
+         }
+        #end-message {
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            text-align: center;
+            white-space: pre-wrap; /* Allow line breaks */
+            margin-bottom: 20px; /* Space between message and buttons */
+            display: none; /* Hidden initially */
+        }
+        /* Style for zone display */
+        #zone-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+        }
+        /* Style for mode display */
+        #mode-display {
+            position: absolute;
+            top: 40px; /* Position below zone display */
+            right: 10px;
+            color: yellow; /* Different color to stand out */
+            font-family: monospace;
+            font-size: 18px; /* Slightly smaller */
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+            display: none; /* Hide initially */
+        }
+    </style>
+</head>
+<body>
+    <div id="title">Alien Escape!</div>
+    <!-- Group UI elements -->
+    <div id="ui-container">
+        <div id="info">Height: 0 m</div>
+        <div id="coins">Coins: 0</div>
+        <div id="speed">Speed: 0 m/s</div>
+    </div>
+    <!-- Zone display -->
+    <div id="zone-display">Zone: Ground Level</div>
+    <!-- Mode display -->
+    <div id="mode-display"></div>
+    <!-- Container for start/end messages and buttons -->
+    <div id="message-container">
+        <div id="end-message"></div>
+        <div id="start-options">
+            <button id="start-regular">Regular</button>
+            <button id="start-invincible">Invincible</button>
+        </div>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                 "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
