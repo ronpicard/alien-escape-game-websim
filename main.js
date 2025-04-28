@@ -6,11 +6,27 @@ let obstacles = [];
 let coins = [];
 let scenery = [];
 let clouds = [];
-const initialForwardSpeed = 100;
-const acceleration = 10;
-const maxSpeed = 400;
-let currentForwardSpeed = initialForwardSpeed;
-const strafeSpeed = 0.5;
+// Speed settings - will be set by user selection
+let selectedInitialForwardSpeed;
+let selectedAcceleration;
+let selectedMaxSpeed;
+// Keep track of the selected *setting object* and mode
+let selectedSpeedSetting = null;
+let selectedModeIsInvincible = null;
+
+// Default values (can be overridden)
+const DEFAULT_INITIAL_FORWARD_SPEED = 100;
+const DEFAULT_ACCELERATION = 10;
+const DEFAULT_MAX_SPEED = 400;
+// Game speed constants
+const SPEED_SLOW = { initial: 150, max: 300, accel: 10 }; // Slightly increased initial for slow
+const SPEED_MEDIUM = { initial: 300, max: 600, accel: 20 };
+const SPEED_FAST = { initial: 450, max: 900, accel: 30 };
+
+let currentForwardSpeed = DEFAULT_INITIAL_FORWARD_SPEED;
+// Separate strafe speeds for keyboard and touch
+const keyboardStrafeSpeed = 2.0;
+const touchStrafeSensitivity = 0.04; // Adjust this to control touch responsiveness
 const planeWidth = 25;
 const planeHeight = 15;
 const initialCloudCount = 15;
@@ -36,18 +52,38 @@ let gameWon = false;
 let isInvincible = false; 
 let keys = {};
 
+// Touch control variables
+let isTouching = false;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchCurrentX = 0;
+let touchCurrentY = 0;
+let touchDeltaX = 0;
+let touchDeltaY = 0;
+
 const clock = new THREE.Clock();
 
 const infoElement = document.getElementById('info');
 const coinsElement = document.getElementById('coins');
 const speedElement = document.getElementById('speed');
 const messageContainer = document.getElementById('message-container'); 
+const speedOptionsDiv = document.getElementById('speed-options'); // Get speed options div
+const speedSlowButton = document.getElementById('speed-slow');
+const speedMediumButton = document.getElementById('speed-medium');
+const speedFastButton = document.getElementById('speed-fast');
 const startOptionsDiv = document.getElementById('start-options'); 
 const endMessageDiv = document.getElementById('end-message'); 
-const startRegularButton = document.getElementById('start-regular');
-const startInvincibleButton = document.getElementById('start-invincible');
 const zoneDisplayElement = document.getElementById('zone-display'); 
 const modeDisplayElement = document.getElementById('mode-display'); 
+// Get new elements
+const modeOptionsDiv = document.getElementById('mode-options');
+const modeRegularButton = document.getElementById('mode-regular');
+const modeInvincibleButton = document.getElementById('mode-invincible');
+const startButtonContainer = document.getElementById('start-button-container');
+const startButton = document.getElementById('start-button');
+const restartSpeedButton = document.getElementById('restart-speed'); // For going back
+const escapeMessageElement = document.getElementById('escape-message');
+const touchControlsElement = document.getElementById('touch-controls'); // Get touch overlay
 
 const ZONE_GROUND = 0;
 const ZONE_AIR_END = 8000; 
@@ -65,6 +101,67 @@ let moonSpawned = false;
 let lastPlanetSpawnDistance = ZONE_SPACE_START; 
 let lastLargeShipSpawnDistance = ZONE_SPACE_START; 
 
+function showStartScreen() {
+    messageContainer.style.display = 'block';
+    endMessageDiv.style.display = 'none'; // Hide end message
+    startOptionsDiv.style.display = 'none'; // Hide restart options
+    speedOptionsDiv.style.display = 'block'; // Show speed options
+    modeOptionsDiv.style.display = 'block'; // Show mode options FROM THE START
+    startButtonContainer.style.display = 'none'; // Hide start button initially until defaults are set
+    modeDisplayElement.style.display = 'none'; // Hide mode display
+    escapeMessageElement.style.display = 'block'; // Show escape message on start screen
+
+    // Reset selections internally (although defaults will override)
+    selectedSpeedSetting = null;
+    selectedModeIsInvincible = null;
+
+    // Reset button styles before applying defaults
+    [speedSlowButton, speedMediumButton, speedFastButton, modeRegularButton, modeInvincibleButton].forEach(btn => {
+        btn.classList.remove('selected');
+    });
+
+    // *** Apply Default Selections ***
+    // Programmatically click the Medium speed and Regular mode buttons
+    // This ensures the selection logic runs, including showing the start button
+    speedMediumButton.click();
+    modeRegularButton.click();
+
+    // Ensure start button is shown after defaults are applied
+    startButtonContainer.style.display = 'block';
+}
+
+// Function to handle speed selection UI updates
+function handleSpeedSelection(selectedButton, speedSetting) {
+    selectedSpeedSetting = speedSetting; // Store the selected setting object
+
+    // Update button styles
+    [speedSlowButton, speedMediumButton, speedFastButton].forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    selectedButton.classList.add('selected');
+
+    // Show start button if mode is already selected
+    if (selectedModeIsInvincible !== null) {
+        startButtonContainer.style.display = 'block';
+    }
+}
+
+// Function to handle mode selection UI updates
+function handleModeSelection(selectedButton, isInvincible) {
+    selectedModeIsInvincible = isInvincible; // Store the selected mode
+
+    // Update button styles
+    [modeRegularButton, modeInvincibleButton].forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    selectedButton.classList.add('selected');
+
+    // Show start button if speed is also selected
+    if (selectedSpeedSetting !== null) {
+        startButtonContainer.style.display = 'block';
+    }
+}
+
 function init() {
     scene = new THREE.Scene();
     const initialBgColor = new THREE.Color(0x87CEEB); 
@@ -77,6 +174,8 @@ function init() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    // Set pixel ratio for sharper rendering on high-DPI displays
+    renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -99,16 +198,38 @@ function init() {
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 
-    startRegularButton.addEventListener('click', () => {
-        startGame(false); 
-    });
-    startInvincibleButton.addEventListener('click', () => {
-        startGame(true); 
+    // Add touch event listeners to the dedicated overlay
+    touchControlsElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    touchControlsElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    touchControlsElement.addEventListener('touchend', onTouchEnd);
+    touchControlsElement.addEventListener('touchcancel', onTouchEnd); // Handle cancellations too
+
+    // Speed selection listeners
+    speedSlowButton.addEventListener('click', () => handleSpeedSelection(speedSlowButton, SPEED_SLOW));
+    speedMediumButton.addEventListener('click', () => handleSpeedSelection(speedMediumButton, SPEED_MEDIUM));
+    speedFastButton.addEventListener('click', () => handleSpeedSelection(speedFastButton, SPEED_FAST));
+
+    // Mode selection listeners
+    modeRegularButton.addEventListener('click', () => handleModeSelection(modeRegularButton, false));
+    modeInvincibleButton.addEventListener('click', () => handleModeSelection(modeInvincibleButton, true));
+
+    // Start Game button listener
+    startButton.addEventListener('click', () => {
+        // Ensure both selections are made
+        if (selectedSpeedSetting && selectedModeIsInvincible !== null) {
+            startGame();
+        } else {
+            console.warn("Please select speed and mode first!");
+            // Optionally provide visual feedback here
+        }
     });
 
-    messageContainer.style.display = 'block';
-    startOptionsDiv.style.display = 'block'; 
-    endMessageDiv.style.display = 'none'; 
+    // Restart button listener (goes back to speed selection)
+    restartSpeedButton.addEventListener('click', () => {
+         showStartScreen(); // Just reset the entire start screen flow
+    });
+
+    showStartScreen(); // Show initial speed selection screen
 }
 
 function createUFO() {
@@ -661,17 +782,29 @@ function createStarDestroyer() {
     return group;
 }
 
-function startGame(invincibleMode = false) {
-    if (gameActive && !gameWon) return;
+function startGame() { 
+    // Use the globally stored selections
+    if (!selectedSpeedSetting || selectedModeIsInvincible === null) {
+        console.error("Attempted to start game without selecting speed and/or mode.");
+        showStartScreen(); // Go back to selection
+        return;
+    }
+    if (gameActive && !gameWon) return; // Prevent starting if already active
+
+    // Apply selected speed settings
+    selectedInitialForwardSpeed = selectedSpeedSetting.initial;
+    selectedMaxSpeed = selectedSpeedSetting.max;
+    selectedAcceleration = selectedSpeedSetting.accel;
+    // Apply selected mode
+    isInvincible = selectedModeIsInvincible;
 
     score = 0;
     coinCount = 0;
-    currentForwardSpeed = initialForwardSpeed;
-    ufo.position.set(0, 5, 0);
+    currentForwardSpeed = selectedInitialForwardSpeed; // Use the selected initial speed
+    ufo.position.set(0, 5, 0); 
     ufo.rotation.set(0, 0, 0);
     gameWon = false;
     moonSpawned = false;
-    isInvincible = invincibleMode;
     lastPlanetSpawnDistance = ZONE_SPACE_START;
     lastLargeShipSpawnDistance = ZONE_SPACE_START;
 
@@ -707,6 +840,7 @@ function startGame(invincibleMode = false) {
     coinsElement.textContent = `Coins: 0`;
     speedElement.textContent = `Speed: ${Math.floor(currentForwardSpeed)} m/s`;
     zoneDisplayElement.textContent = 'Zone: Ground Level';
+    escapeMessageElement.style.display = 'block'; // Ensure escape message is visible during game
 
     // Set and show mode display text
     if (isInvincible) {
@@ -745,6 +879,19 @@ function createCloud() {
     return group;
 }
 
+function createInitialClouds() {
+    for (let i = 0; i < initialCloudCount; i++) {
+        const cloud = createCloud();
+        cloud.position.set(
+            (Math.random() - 0.5) * planeWidth * 2.5,
+            (Math.random() * planeHeight * 1.5) + 2,
+            (Math.random() * -3000) - 1000
+        );
+        scene.add(cloud);
+        clouds.push(cloud);
+    }
+}
+
 function spawnCloud(forceAhead = false) {
     // Add check to stop spawning clouds in space
     if (score >= ZONE_SPACE_START) {
@@ -770,19 +917,6 @@ function spawnCloud(forceAhead = false) {
 
     clouds.push(cloud);
     scene.add(cloud);
-}
-
-function createInitialClouds() {
-    for (let i = 0; i < initialCloudCount; i++) {
-        const cloud = createCloud();
-        cloud.position.set(
-            (Math.random() - 0.5) * planeWidth * 2.5,
-            (Math.random() * planeHeight * 1.5) + 2,
-            (Math.random() * -3000) - 1000
-        );
-        scene.add(cloud);
-        clouds.push(cloud);
-    }
 }
 
 function spawnObstacle(forceAhead = false) {
@@ -1159,7 +1293,7 @@ function checkCollisions() {
 function handleInput(delta) {
     if (!gameActive) return;
 
-    const moveSpeed = strafeSpeed * delta * 60;
+    const moveSpeed = keyboardStrafeSpeed * delta * 60;
 
     let targetX = ufo.position.x;
     let targetY = ufo.position.y;
@@ -1185,6 +1319,40 @@ function handleInput(delta) {
 
     const targetPitch = (keys['arrowup'] || keys['w'] ? 1 : 0) * Math.PI / 24 + (keys['arrowdown'] || keys['s'] ? -1 : 0) * Math.PI / 24;
     ufo.rotation.x = THREE.MathUtils.lerp(ufo.rotation.x, targetPitch, 0.1);
+}
+
+function onTouchStart(event) {
+    if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        isTouching = true;
+    }
+}
+
+function onTouchMove(event) {
+    if (isTouching && event.touches.length === 1) {
+        const touch = event.touches[0];
+        touchCurrentX = touch.clientX;
+        touchCurrentY = touch.clientY;
+        touchDeltaX = touchCurrentX - touchStartX;
+        touchDeltaY = touchCurrentY - touchStartY;
+
+        // Apply touch movement to UFO position
+        ufo.position.x += touchDeltaX * touchStrafeSensitivity;
+        ufo.position.y += touchDeltaY * touchStrafeSensitivity;
+
+        ufo.position.x = THREE.MathUtils.clamp(ufo.position.x, -planeWidth, planeWidth);
+        ufo.position.y = THREE.MathUtils.clamp(ufo.position.y, 1, planeHeight * 1.5);
+
+        // Update touch start position
+        touchStartX = touchCurrentX;
+        touchStartY = touchCurrentY;
+    }
+}
+
+function onTouchEnd() {
+    isTouching = false;
 }
 
 function updateEnvironment(distanceZ) {
@@ -1248,9 +1416,14 @@ function winGame() {
     clock.stop();
     endMessageDiv.textContent = `Congratulations!\nYou Reached the Black Hole!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}${isInvincible ? '\n(Invincible Mode)' : ''}`;
     endMessageDiv.style.display = 'block';
-    startOptionsDiv.style.display = 'block';
-    messageContainer.style.display = 'block';
+    // Show only the restart options, hide speed/mode/start
+    speedOptionsDiv.style.display = 'none';
+    modeOptionsDiv.style.display = 'none';
+    startButtonContainer.style.display = 'none';
+    startOptionsDiv.style.display = 'block'; // Show restart options
+    messageContainer.style.display = 'block'; // Show the container
     modeDisplayElement.style.display = 'none';
+    escapeMessageElement.style.display = 'none'; // Hide escape message on win screen
 }
 
 function gameOver() {
@@ -1259,9 +1432,14 @@ function gameOver() {
     clock.stop();
     endMessageDiv.textContent = `Game Over!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}`;
     endMessageDiv.style.display = 'block';
-    startOptionsDiv.style.display = 'block';
-    messageContainer.style.display = 'block';
+    // Show only the restart options, hide speed/mode/start
+    speedOptionsDiv.style.display = 'none';
+    modeOptionsDiv.style.display = 'none';
+    startButtonContainer.style.display = 'none';
+    startOptionsDiv.style.display = 'block'; // Show restart options
+    messageContainer.style.display = 'block'; // Show the container
     modeDisplayElement.style.display = 'none';
+    escapeMessageElement.style.display = 'none'; // Hide escape message on game over screen
 }
 
 function animate() {
@@ -1273,9 +1451,9 @@ function animate() {
     // Clamp delta to prevent large jumps if tab loses focus
     const clampedDelta = Math.min(delta, 0.05); // Max delta of 50ms (20 FPS)
 
-    if (currentForwardSpeed < maxSpeed) {
-        currentForwardSpeed += acceleration * clampedDelta;
-        currentForwardSpeed = Math.min(currentForwardSpeed, maxSpeed);
+    if (currentForwardSpeed < selectedMaxSpeed) {
+        currentForwardSpeed += selectedAcceleration * clampedDelta;
+        currentForwardSpeed = Math.min(currentForwardSpeed, selectedMaxSpeed);
     }
 
     handleInput(clampedDelta);
