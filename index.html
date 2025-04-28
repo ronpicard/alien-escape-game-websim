@@ -1,10 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Alien Escape!</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        canvas { display: block; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            overscroll-behavior: none; /* Prevent pull-to-refresh */
+        }
+        canvas {
+            display: block;
+        }
         #title {
             position: absolute;
             top: 10px;
@@ -16,98 +25,284 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
             z-index: 100;
             white-space: nowrap; /* Prevent wrapping */
+            user-select: none; /* Prevent text selection */
         }
         #ui-container {
             position: absolute;
             top: 10px;
-            left: 10px; /* Align to left */
-            width: auto; /* Adjust width */
-            text-align: left; /* Align text left */
+            left: 10px;
+            width: auto;
+            text-align: left;
             z-index: 100;
             display: block;
             color: white;
             font-family: monospace;
-            font-size: 24px;
-            text-shadow: 1px 1px 2px black; /* Add shadow for readability */
-            margin-top: 40px; /* Push down below title */
-        }
-        #info { /* Keep height display */
-            margin-bottom: 5px;
-        }
-        #coins { /* Add coin display */
-            color: white;
-            font-family: monospace;
-            font-size: 24px;
-            text-shadow: 1px 1px 2px black; /* Add shadow for readability */
-            margin-bottom: 5px; /* Add margin bottom */
-        }
-        /* Add speed display style */
-        #speed {
-            color: white;
-            font-family: monospace;
-            font-size: 24px;
+            font-size: 20px; /* Slightly reduced default size */
             text-shadow: 1px 1px 2px black;
+            margin-top: 40px;
+            user-select: none; /* Prevent text selection */
         }
-        /* Container for start buttons and end messages */
+        #info, #coins, #speed {
+            margin-bottom: 5px;
+            font-size: inherit; /* Inherit from container */
+        }
+        #speed {
+            margin-bottom: 15px; /* Space before controls */
+        }
+        #controls {
+            color: yellow;
+            font-family: monospace;
+            font-size: 16px; /* Slightly smaller */
+            text-shadow: 1px 1px 2px black;
+            line-height: 1.4;
+            user-select: none; /* Prevent text selection */
+        }
         #message-container {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 101;
-            display: none; /* Hidden initially, shown by JS */
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 30px;
+            display: block;
+            background-color: rgba(0, 0, 0, 0.75); /* Slightly darker */
+            padding: 25px;
             border-radius: 10px;
             text-align: center;
+            min-width: 300px; /* Adjusted min-width */
+            max-width: 90%; /* Ensure it doesn't exceed screen width */
+            box-sizing: border-box; /* Include padding in width calculation */
         }
-        #start-options button {
+        #start-options button,
+        #speed-options button,
+        #mode-options button {
             font-family: monospace;
-            font-size: 24px;
+            font-size: 18px; /* Smaller base size for buttons */
+            padding: 12px 24px;
+            margin: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            color: white;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            display: inline-block; /* Ensure wrapping works */
+        }
+
+        #speed-options button {
+            background-color: #2196F3; /* Blue color */
+        }
+        #speed-options button:hover {
+            background-color: #1e88e5;
+        }
+        #speed-options button.selected {
+            background-color: #64b5f6; /* Lighter blue */
+            border-color: #ffffff; /* White border when selected */
+        }
+        #speed-options label {
+             display: block;
+             color: white;
+             font-family: monospace;
+             font-size: 20px;
+             margin-bottom: 10px;
+             user-select: none;
+        }
+        #mode-options {
+            margin-bottom: 15px;
+        }
+        #mode-options label {
+             display: block;
+             color: white;
+             font-family: monospace;
+             font-size: 20px;
+             margin-bottom: 10px;
+             user-select: none;
+        }
+        #mode-options button {
+            background-color: #ff9800; /* Orange color */
+        }
+        #mode-options button:hover {
+            background-color: #fb8c00;
+        }
+        #mode-options button.selected {
+            background-color: #ffb74d; /* Lighter orange */
+            border-color: #ffffff;
+        }
+
+        #start-button-container {
+            margin-top: 15px;
+        }
+        #start-button {
+            font-family: 'Arial Black', Gadget, sans-serif;
+            font-size: 24px; /* Smaller start button */
             padding: 15px 30px;
-            margin: 10px;
             cursor: pointer;
             border: none;
-            border-radius: 5px;
-            background-color: #4CAF50;
+            border-radius: 8px;
+            background-color: #f44336; /* Red */
             color: white;
             transition: background-color 0.3s ease;
+            text-transform: uppercase;
         }
+        #start-button:hover {
+            background-color: #e53935;
+        }
+         #start-options { /* Container for restart options */
+             margin-top: 15px; /* Add some space above */
+         }
+        #start-options button { /* Specifically style restart button */
+             background-color: #4CAF50; /* Green */
+         }
          #start-options button:hover {
              background-color: #45a049;
          }
         #end-message {
             color: white;
             font-family: monospace;
-            font-size: 24px;
+            font-size: 20px; /* Reduced size */
             text-align: center;
-            white-space: pre-wrap; /* Allow line breaks */
-            margin-bottom: 20px; /* Space between message and buttons */
-            display: none; /* Hidden initially */
+            white-space: pre-wrap;
+            margin-bottom: 15px;
+             user-select: none;
         }
-        /* Style for zone display */
         #zone-display {
             position: absolute;
             top: 10px;
             right: 10px;
             color: white;
             font-family: monospace;
-            font-size: 24px;
+            font-size: 18px; /* Reduced size */
             text-shadow: 1px 1px 2px black;
             z-index: 100;
+            user-select: none;
         }
-        /* Style for mode display */
         #mode-display {
             position: absolute;
-            top: 40px; /* Position below zone display */
+            top: 35px; /* Position below zone display */
             right: 10px;
-            color: yellow; /* Different color to stand out */
+            color: yellow;
             font-family: monospace;
-            font-size: 18px; /* Slightly smaller */
+            font-size: 16px; /* Reduced size */
             text-shadow: 1px 1px 2px black;
             z-index: 100;
-            display: none; /* Hide initially */
+            user-select: none;
         }
+        #escape-message {
+            position: absolute;
+            top: 55px; /* Position below mode display */
+            right: 10px;
+            color: #ff9800;
+            font-family: monospace;
+            font-size: 16px; /* Reduced size */
+            text-shadow: 1px 1px 2px black;
+            z-index: 100;
+            user-select: none;
+        }
+
+        /* Touch control overlay - invisible, covers screen */
+        #touch-controls {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50; /* Below UI, above canvas */
+            /* background-color: rgba(255, 0, 0, 0.1); /* DEBUG: Make visible */
+        }
+
+        /* Media Query for smaller screens */
+        @media (max-width: 768px) {
+            #title {
+                font-size: 28px;
+                top: 5px;
+            }
+            #ui-container {
+                font-size: 16px;
+                margin-top: 35px; /* Adjust margin */
+            }
+             #controls {
+                font-size: 14px;
+            }
+            #message-container {
+                padding: 15px;
+                min-width: 250px; /* Further reduce min-width */
+            }
+            #start-options button,
+            #speed-options button,
+            #mode-options button {
+                font-size: 16px;
+                padding: 10px 20px;
+                margin: 5px;
+            }
+             #speed-options label,
+             #mode-options label {
+                font-size: 18px;
+             }
+            #start-button {
+                font-size: 20px;
+                padding: 12px 25px;
+            }
+            #end-message {
+                font-size: 18px;
+            }
+            #zone-display {
+                font-size: 16px;
+                 top: 5px;
+            }
+            #mode-display {
+                font-size: 14px;
+                top: 25px;
+            }
+             #escape-message {
+                font-size: 14px;
+                 top: 45px;
+            }
+        }
+         @media (max-width: 480px) {
+             #title {
+                 font-size: 20px;
+             }
+             #ui-container {
+                 font-size: 12px;
+                 margin-top: 30px;
+                 left: 5px;
+             }
+             #controls {
+                 font-size: 11px;
+                 line-height: 1.3;
+             }
+             #zone-display {
+                 font-size: 12px;
+                 right: 5px;
+             }
+             #mode-display {
+                 font-size: 11px;
+                 top: 20px;
+                 right: 5px;
+             }
+             #escape-message {
+                 font-size: 11px;
+                 top: 35px;
+                 right: 5px;
+             }
+              #message-container {
+                padding: 10px;
+                min-width: 90%; /* Take more width */
+             }
+              #start-options button,
+              #speed-options button,
+              #mode-options button {
+                font-size: 14px;
+                padding: 8px 16px;
+                margin: 4px;
+              }
+              #start-button {
+                font-size: 16px;
+                padding: 10px 20px;
+              }
+              #end-message {
+                font-size: 14px;
+              }
+         }
+
     </style>
 </head>
 <body>
@@ -117,19 +312,43 @@
         <div id="info">Height: 0 m</div>
         <div id="coins">Coins: 0</div>
         <div id="speed">Speed: 0 m/s</div>
+        <!-- Updated controls display text -->
+        <div id="controls">Controls:<br>Arrows/WASD or Touch/Drag</div>
     </div>
     <!-- Zone display -->
     <div id="zone-display">Zone: Ground Level</div>
     <!-- Mode display -->
     <div id="mode-display"></div>
+    <!-- Escape message -->
+    <div id="escape-message">Escape to the black hole!</div>
     <!-- Container for start/end messages and buttons -->
     <div id="message-container">
         <div id="end-message"></div>
-        <div id="start-options">
-            <button id="start-regular">Regular</button>
-            <button id="start-invincible">Invincible</button>
+        <!-- Speed Selection -->
+        <div id="speed-options">
+            <label>Select Speed:</label>
+            <button id="speed-slow">Slow</button>
+            <button id="speed-medium">Medium</button>
+            <button id="speed-fast">Fast</button>
+        </div>
+        <!-- Mode Selection -->
+        <div id="mode-options">
+            <label>Select Mode:</label>
+            <button id="mode-regular">Regular</button>
+            <button id="mode-invincible">Invincible</button>
+        </div>
+         <!-- Start Button Container -->
+        <div id="start-button-container">
+            <button id="start-button">Start Game!</button>
+        </div>
+        <!-- Restart Options (shown on game end) -->
+        <div id="start-options" style="display: none;">
+             <p style="color: white; font-family: monospace; font-size: 18px; margin-top: 20px;">Play Again?</p>
+             <button id="restart-speed">Change Speed</button>
         </div>
     </div>
+    <!-- Add touch control overlay -->
+    <div id="touch-controls"></div>
     <script type="importmap">
         {
             "imports": {
