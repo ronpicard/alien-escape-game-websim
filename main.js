@@ -15,18 +15,22 @@ let selectedSpeedSetting = null;
 let selectedModeIsInvincible = null;
 
 // Default values (can be overridden)
-const DEFAULT_INITIAL_FORWARD_SPEED = 100;
-const DEFAULT_ACCELERATION = 10;
-const DEFAULT_MAX_SPEED = 400;
-// Game speed constants
-const SPEED_SLOW = { initial: 150, max: 300, accel: 10 }; // Slightly increased initial for slow
-const SPEED_MEDIUM = { initial: 300, max: 600, accel: 20 };
-const SPEED_FAST = { initial: 450, max: 900, accel: 30 };
+// Set the standard initial speed
+const DEFAULT_INITIAL_FORWARD_SPEED = 25;
+
+// Game speed constants - Updated values
+const SPEED_SLOW = { initial: DEFAULT_INITIAL_FORWARD_SPEED, max: 50, accel: 1 };
+const SPEED_MEDIUM = { initial: DEFAULT_INITIAL_FORWARD_SPEED, max: 100, accel: 5 };
+const SPEED_FAST = { initial: DEFAULT_INITIAL_FORWARD_SPEED, max: 200, accel: 10 };
+// Add a placeholder for custom speed, values will be set by user input
+const SPEED_CUSTOM = { initial: DEFAULT_INITIAL_FORWARD_SPEED, max: 0, accel: 0, isCustom: true };
 
 let currentForwardSpeed = DEFAULT_INITIAL_FORWARD_SPEED;
 // Separate strafe speeds for keyboard and touch
-const keyboardStrafeSpeed = 2.0;
-const touchStrafeSensitivity = 0.04; // Adjust this to control touch responsiveness
+// Increased speeds
+const keyboardStrafeSpeed = 3.5; // Was 2.0
+const touchStrafeSensitivity = 0.07; // Was 0.04, adjust this to control touch responsiveness
+
 const planeWidth = 25;
 const planeHeight = 15;
 const initialCloudCount = 15;
@@ -51,6 +55,7 @@ let gameActive = false;
 let gameWon = false;
 let isInvincible = false; 
 let keys = {};
+let isPaused = false; // Pause state
 
 // Touch control variables
 let isTouching = false;
@@ -61,8 +66,17 @@ let touchCurrentY = 0;
 let touchDeltaX = 0;
 let touchDeltaY = 0;
 
+// --- Arrow Pad Controls (for mobile) ---
+let touchArrowState = {
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+};
+
 const clock = new THREE.Clock();
 
+const controlsElement = document.getElementById('controls'); // Get controls display
 const infoElement = document.getElementById('info');
 const coinsElement = document.getElementById('coins');
 const speedElement = document.getElementById('speed');
@@ -71,6 +85,11 @@ const speedOptionsDiv = document.getElementById('speed-options'); // Get speed o
 const speedSlowButton = document.getElementById('speed-slow');
 const speedMediumButton = document.getElementById('speed-medium');
 const speedFastButton = document.getElementById('speed-fast');
+const speedCustomButton = document.getElementById('speed-custom');
+const customSpeedInputDiv = document.getElementById('custom-speed-input');
+const customMaxSpeedInput = document.getElementById('custom-max-speed');
+const customAccelInput = document.getElementById('custom-accel');
+const confirmCustomSpeedButton = document.getElementById('confirm-custom-speed');
 const startOptionsDiv = document.getElementById('start-options'); 
 const endMessageDiv = document.getElementById('end-message'); 
 const zoneDisplayElement = document.getElementById('zone-display'); 
@@ -84,6 +103,16 @@ const startButton = document.getElementById('start-button');
 const restartSpeedButton = document.getElementById('restart-speed'); // For going back
 const escapeMessageElement = document.getElementById('escape-message');
 const touchControlsElement = document.getElementById('touch-controls'); // Get touch overlay
+// In-Game buttons
+const pauseButton = document.getElementById('pause-button');
+const restartInGameButton = document.getElementById('restart-ingame-button');
+
+// --- Arrow Pad Elements ---
+const touchArrowsContainer = document.getElementById('touch-arrows-container');
+const arrowUp = document.getElementById('arrow-up');
+const arrowLeft = document.getElementById('arrow-left');
+const arrowRight = document.getElementById('arrow-right');
+const arrowDown = document.getElementById('arrow-down');
 
 const ZONE_GROUND = 0;
 const ZONE_AIR_END = 8000; 
@@ -108,15 +137,24 @@ function showStartScreen() {
     speedOptionsDiv.style.display = 'block'; // Show speed options
     modeOptionsDiv.style.display = 'block'; // Show mode options FROM THE START
     startButtonContainer.style.display = 'none'; // Hide start button initially until defaults are set
-    modeDisplayElement.style.display = 'none'; // Hide mode display
+    modeDisplayElement.style.display = 'block'; // Show mode display
+    modeDisplayElement.textContent = 'Avoid the obstacles!'; // Default to regular mode description
     escapeMessageElement.style.display = 'block'; // Show escape message on start screen
+    customSpeedInputDiv.style.display = 'none'; // Hide custom input area
+    // Hide in-game buttons
+    pauseButton.style.display = 'none';
+    restartInGameButton.style.display = 'none';
+    // Reset pause state if returning here
+    isPaused = false;
+    pauseButton.textContent = 'Pause';
+    pauseButton.classList.remove('paused');
 
     // Reset selections internally (although defaults will override)
     selectedSpeedSetting = null;
     selectedModeIsInvincible = null;
 
     // Reset button styles before applying defaults
-    [speedSlowButton, speedMediumButton, speedFastButton, modeRegularButton, modeInvincibleButton].forEach(btn => {
+    [speedSlowButton, speedMediumButton, speedFastButton, speedCustomButton, modeRegularButton, modeInvincibleButton].forEach(btn => {
         btn.classList.remove('selected');
     });
 
@@ -135,10 +173,15 @@ function handleSpeedSelection(selectedButton, speedSetting) {
     selectedSpeedSetting = speedSetting; // Store the selected setting object
 
     // Update button styles
-    [speedSlowButton, speedMediumButton, speedFastButton].forEach(btn => {
+    [speedSlowButton, speedMediumButton, speedFastButton, speedCustomButton].forEach(btn => {
         btn.classList.remove('selected');
     });
     selectedButton.classList.add('selected');
+
+    // If a preset speed was chosen, hide the custom input area
+    if (!speedSetting.isCustom) {
+        customSpeedInputDiv.style.display = 'none';
+    }
 
     // Show start button if mode is already selected
     if (selectedModeIsInvincible !== null) {
@@ -155,6 +198,14 @@ function handleModeSelection(selectedButton, isInvincible) {
         btn.classList.remove('selected');
     });
     selectedButton.classList.add('selected');
+
+    // Update the mode display text immediately
+    if (isInvincible) {
+        modeDisplayElement.textContent = 'You are invincible!';
+    } else {
+        modeDisplayElement.textContent = 'Avoid the obstacles!';
+    }
+    modeDisplayElement.style.display = 'block'; // Ensure it's visible
 
     // Show start button if speed is also selected
     if (selectedSpeedSetting !== null) {
@@ -194,6 +245,15 @@ function init() {
 
     createUFO(); 
 
+    // Check if touch arrows should be displayed and update control text
+    checkAndUpdateControlsDisplay();
+
+    // Create initial clouds so they are visible behind the start menu
+    createInitialClouds();
+
+    // Perform an initial render of the scene before showing the start screen
+    renderer.render(scene, camera);
+
     window.addEventListener('resize', onWindowResize, false);
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
@@ -204,10 +264,61 @@ function init() {
     touchControlsElement.addEventListener('touchend', onTouchEnd);
     touchControlsElement.addEventListener('touchcancel', onTouchEnd); // Handle cancellations too
 
+    // Add touch event listeners for arrow buttons
+    const arrows = [arrowUp, arrowDown, arrowLeft, arrowRight];
+    const arrowMapping = {
+        'arrow-up': 'up',
+        'arrow-down': 'down',
+        'arrow-left': 'left',
+        'arrow-right': 'right'
+    };
+
+    arrows.forEach(arrow => {
+        if (arrow) {
+            const direction = arrowMapping[arrow.id];
+            arrow.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scrolling/zooming
+                touchArrowState[direction] = true;
+                arrow.classList.add('active');
+            }, { passive: false });
+
+            arrow.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                touchArrowState[direction] = false;
+                arrow.classList.remove('active');
+            });
+
+            arrow.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                touchArrowState[direction] = false;
+                arrow.classList.remove('active');
+            });
+
+            // Add mouse events for desktop testing/debugging
+            arrow.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                touchArrowState[direction] = true;
+                arrow.classList.add('active');
+            });
+            arrow.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                touchArrowState[direction] = false;
+                arrow.classList.remove('active');
+            });
+            arrow.addEventListener('mouseleave', (e) => { // Handle mouse leaving the button while pressed
+                if (touchArrowState[direction]) {
+                    touchArrowState[direction] = false;
+                    arrow.classList.remove('active');
+                }
+            });
+        }
+    });
+
     // Speed selection listeners
     speedSlowButton.addEventListener('click', () => handleSpeedSelection(speedSlowButton, SPEED_SLOW));
     speedMediumButton.addEventListener('click', () => handleSpeedSelection(speedMediumButton, SPEED_MEDIUM));
     speedFastButton.addEventListener('click', () => handleSpeedSelection(speedFastButton, SPEED_FAST));
+    speedCustomButton.addEventListener('click', () => handleSpeedSelection(speedCustomButton, SPEED_CUSTOM));
 
     // Mode selection listeners
     modeRegularButton.addEventListener('click', () => handleModeSelection(modeRegularButton, false));
@@ -217,6 +328,11 @@ function init() {
     startButton.addEventListener('click', () => {
         // Ensure both selections are made
         if (selectedSpeedSetting && selectedModeIsInvincible !== null) {
+            // Check if custom speed was selected but not confirmed yet
+            if (selectedSpeedSetting.isCustom && customSpeedInputDiv.style.display === 'block') {
+                 alert("Please confirm your custom speed settings first!");
+                 return; // Prevent starting
+            }
             startGame();
         } else {
             console.warn("Please select speed and mode first!");
@@ -226,7 +342,48 @@ function init() {
 
     // Restart button listener (goes back to speed selection)
     restartSpeedButton.addEventListener('click', () => {
-         showStartScreen(); // Just reset the entire start screen flow
+        showStartScreen(); // Just reset the entire start screen flow
+    });
+
+    // Custom speed button listener
+    speedCustomButton.addEventListener('click', () => {
+        handleSpeedSelection(speedCustomButton, SPEED_CUSTOM); // Select "Custom"
+        customSpeedInputDiv.style.display = 'flex'; // Show the input area
+        startButtonContainer.style.display = 'none'; // Hide start button until confirmed
+    });
+
+    confirmCustomSpeedButton.addEventListener('click', () => {
+        const maxSpeed = parseInt(customMaxSpeedInput.value, 10);
+        const accel = parseInt(customAccelInput.value, 10);
+
+        // Basic validation
+        if (isNaN(maxSpeed) || isNaN(accel) || maxSpeed <= 0 || accel <= 0 || maxSpeed > 2000 || accel > 100) {
+            alert("Invalid custom speed values. Max Speed (10-2000), Acceleration (1-100).");
+            return;
+        }
+
+        // Update the custom speed setting object
+        SPEED_CUSTOM.max = maxSpeed;
+        SPEED_CUSTOM.accel = accel;
+        // We keep initial as the default
+
+        selectedSpeedSetting = SPEED_CUSTOM; // Ensure it's set
+
+        customSpeedInputDiv.style.display = 'none'; // Hide input area after confirm
+        speedCustomButton.classList.add('selected'); // Keep custom button selected
+
+        // Show start button if mode is also selected
+        if (selectedModeIsInvincible !== null) {
+            startButtonContainer.style.display = 'block';
+        }
+    });
+
+    // Pause button listener
+    pauseButton.addEventListener('click', togglePause);
+
+    // In-Game Restart button listener - NOW REFRESHES THE PAGE
+    restartInGameButton.addEventListener('click', () => {
+        location.reload(); // Refresh the entire page
     });
 
     showStartScreen(); // Show initial speed selection screen
@@ -792,7 +949,7 @@ function startGame() {
     if (gameActive && !gameWon) return; // Prevent starting if already active
 
     // Apply selected speed settings
-    selectedInitialForwardSpeed = selectedSpeedSetting.initial;
+    selectedInitialForwardSpeed = selectedSpeedSetting.initial; // Use the initial from the setting (now default for all)
     selectedMaxSpeed = selectedSpeedSetting.max;
     selectedAcceleration = selectedSpeedSetting.accel;
     // Apply selected mode
@@ -807,6 +964,7 @@ function startGame() {
     moonSpawned = false;
     lastPlanetSpawnDistance = ZONE_SPACE_START;
     lastLargeShipSpawnDistance = ZONE_SPACE_START;
+    isPaused = false; // Ensure game starts unpaused
 
     obstacles.forEach(obj => scene.remove(obj));
     obstacles = [];
@@ -849,6 +1007,12 @@ function startGame() {
         modeDisplayElement.textContent = 'Avoid the obstacles!';
     }
     modeDisplayElement.style.display = 'block';
+
+    // Show in-game buttons
+    pauseButton.textContent = 'Pause';
+    pauseButton.classList.remove('paused');
+    pauseButton.style.display = 'block';
+    restartInGameButton.style.display = 'block';
 
     clock.start();
     animate();
@@ -1247,7 +1411,7 @@ function updateScenery() {
 }
 
 function checkCollisions() {
-    if (!ufo || !ufo.userData.collider || !gameActive) return;
+    if (!ufo || !ufo.userData.collider || !gameActive || isPaused) return; // Don't check if paused
 
     ufo.userData.collider.updateWorldMatrix(true, false);
     ufoBoundingBox.setFromObject(ufo.userData.collider);
@@ -1278,9 +1442,12 @@ function checkCollisions() {
     // Check coins separately
     for (let i = coins.length - 1; i >= 0; i--) {
         const coin = coins[i];
-        const distance = ufo.position.distanceTo(coin.position);
-        const ufoRadius = ufoBoundingBox.getSize(new THREE.Vector3()).length() * 0.4;
-        if (distance < ufoRadius + coin.userData.boundingRadius * 0.9) {
+        // Update coin bounding box before checking
+        if (!coin.userData.boundingBox) {
+            coin.userData.boundingBox = new THREE.Box3();
+        }
+        try { coin.userData.boundingBox.setFromObject(coin, true); } catch(e) {}
+        if (ufoBoundingBox.intersectsBox(coin.userData.boundingBox)) {
             coinCount++;
             coinsElement.textContent = `Coins: ${coinCount}`;
             scene.remove(coin);
@@ -1291,68 +1458,123 @@ function checkCollisions() {
 }
 
 function handleInput(delta) {
-    if (!gameActive) return;
+    if (!gameActive || isPaused) return; // Ignore input if paused
 
-    const moveSpeed = keyboardStrafeSpeed * delta * 60;
+    // Determine if arrow pad is active (visible)
+    const isMobileView = getComputedStyle(touchArrowsContainer).display !== 'none';
+    const moveSpeed = keyboardStrafeSpeed * delta * 60; // Use same speed for keys and arrows
 
     let targetX = ufo.position.x;
     let targetY = ufo.position.y;
 
-    if (keys['arrowleft'] || keys['a']) {
-        targetX -= moveSpeed;
+    // Keyboard OR Touch Arrow Input (Apply speed directly)
+    if (keys['arrowleft'] || keys['a'] || touchArrowState.left) {
+        targetX -= moveSpeed; // Use updated keyboardStrafeSpeed
     }
-    if (keys['arrowright'] || keys['d']) {
-        targetX += moveSpeed;
+    if (keys['arrowright'] || keys['d'] || touchArrowState.right) {
+        targetX += moveSpeed; // Use updated keyboardStrafeSpeed
     }
-    if (keys['arrowup'] || keys['w']) {
-        targetY += moveSpeed;
+    if (keys['arrowup'] || keys['w'] || touchArrowState.up) {
+        targetY += moveSpeed; // Use updated keyboardStrafeSpeed
     }
-    if (keys['arrowdown'] || keys['s']) {
-        targetY -= moveSpeed;
+    if (keys['arrowdown'] || keys['s'] || touchArrowState.down) {
+        targetY -= moveSpeed; // Use updated keyboardStrafeSpeed
     }
 
-    ufo.position.x = THREE.MathUtils.clamp(targetX, -planeWidth, planeWidth);
-    ufo.position.y = THREE.MathUtils.clamp(targetY, 1, planeHeight * 1.5);
 
-    const targetBank = (keys['arrowright'] || keys['d'] ? -1 : 0) * Math.PI / 12 + (keys['arrowleft'] || keys['a'] ? 1 : 0) * Math.PI / 12;
+    // Full Screen Touch Input (only if NOT in mobile view with arrows)
+    if (!isMobileView && isTouching) {
+        // Calculate delta movement based on sensitivity
+        let moveX = touchDeltaX * touchStrafeSensitivity; // Use updated touchStrafeSensitivity
+        let moveY = -touchDeltaY * touchStrafeSensitivity; // Y is inverted, use updated sensitivity
+
+        targetX += moveX;
+        targetY += moveY;
+
+        // Reset deltas after applying movement for this frame
+        // The start positions will be updated in onTouchMove for the *next* frame's delta
+        touchDeltaX = 0;
+        touchDeltaY = 0;
+    }
+
+    // Clamp and Apply position smoothly (Lerp for smoother feel)
+    const lerpFactor = 0.2; // Adjust for desired smoothness
+    ufo.position.x = THREE.MathUtils.lerp(ufo.position.x, THREE.MathUtils.clamp(targetX, -planeWidth, planeWidth), lerpFactor);
+    ufo.position.y = THREE.MathUtils.lerp(ufo.position.y, THREE.MathUtils.clamp(targetY, 1, planeHeight * 1.5), lerpFactor);
+
+    // --- Banking/Pitch based on *intended* direction (keys or arrows) ---
+    let horizontalInput = 0;
+    if (keys['arrowright'] || keys['d'] || touchArrowState.right) horizontalInput = -1;
+    if (keys['arrowleft'] || keys['a'] || touchArrowState.left) horizontalInput = 1;
+
+    let verticalInput = 0;
+    if (keys['arrowup'] || keys['w'] || touchArrowState.up) verticalInput = 1;
+    if (keys['arrowdown'] || keys['s'] || touchArrowState.down) verticalInput = -1;
+
+    // --- Banking/Pitch based on *touch drag* direction (if active) ---
+     if (!isMobileView && isTouching && (touchCurrentX !== touchStartX || touchCurrentY !== touchStartY)) {
+         const dragDeltaX = touchCurrentX - touchStartX;
+         const dragDeltaY = touchCurrentY - touchStartY;
+         // Normalize or scale delta if needed, apply threshold
+         const sensitivity = 0.05;
+         if (Math.abs(dragDeltaX) > 2) { // Threshold
+             horizontalInput = -Math.sign(dragDeltaX) * Math.min(1, Math.abs(dragDeltaX) * sensitivity);
+         }
+          if (Math.abs(dragDeltaY) > 2) { // Threshold
+             verticalInput = -Math.sign(dragDeltaY) * Math.min(1, Math.abs(dragDeltaY) * sensitivity); // Inverted Y
+         }
+     }
+
+    const targetBank = horizontalInput * Math.PI / 10; // Slightly more bank
     ufo.rotation.z = THREE.MathUtils.lerp(ufo.rotation.z, targetBank, 0.1);
 
-    const targetPitch = (keys['arrowup'] || keys['w'] ? 1 : 0) * Math.PI / 24 + (keys['arrowdown'] || keys['s'] ? -1 : 0) * Math.PI / 24;
+    const targetPitch = verticalInput * Math.PI / 20; // Slightly more pitch
     ufo.rotation.x = THREE.MathUtils.lerp(ufo.rotation.x, targetPitch, 0.1);
 }
 
 function onTouchStart(event) {
+    // Only handle full-screen drag if arrows aren't visible
+    if (getComputedStyle(touchArrowsContainer).display !== 'none') return;
+     event.preventDefault(); // Prevent default touch actions like scrolling
     if (event.touches.length === 1) {
         const touch = event.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
+        // Reset current/delta on new touch
+        touchCurrentX = touchStartX;
+        touchCurrentY = touchStartY;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
         isTouching = true;
     }
 }
 
 function onTouchMove(event) {
+    // Only handle full-screen drag if arrows aren't visible
+    if (getComputedStyle(touchArrowsContainer).display !== 'none') return;
+    event.preventDefault(); // Prevent default touch actions like scrolling
     if (isTouching && event.touches.length === 1) {
         const touch = event.touches[0];
+        // Update current position
         touchCurrentX = touch.clientX;
         touchCurrentY = touch.clientY;
+        // Calculate delta since the START of the drag for this frame's input
         touchDeltaX = touchCurrentX - touchStartX;
         touchDeltaY = touchCurrentY - touchStartY;
 
-        // Apply touch movement to UFO position
-        ufo.position.x += touchDeltaX * touchStrafeSensitivity;
-        ufo.position.y += touchDeltaY * touchStrafeSensitivity;
-
-        ufo.position.x = THREE.MathUtils.clamp(ufo.position.x, -planeWidth, planeWidth);
-        ufo.position.y = THREE.MathUtils.clamp(ufo.position.y, 1, planeHeight * 1.5);
-
-        // Update touch start position
-        touchStartX = touchCurrentX;
-        touchStartY = touchCurrentY;
+        // Don't directly move the UFO here. Let handleInput manage movement.
+        // Just update the delta values.
     }
 }
 
-function onTouchEnd() {
+function onTouchEnd(event) {
+     event.preventDefault(); // Prevent default touch actions
     isTouching = false;
+    // Reset deltas when touch ends
+    touchDeltaX = 0;
+    touchDeltaY = 0;
+     // Optionally reset ufo tilt smoothly when touch ends
+     // This is handled by the lerp in handleInput when input becomes 0
 }
 
 function updateEnvironment(distanceZ) {
@@ -1416,6 +1638,9 @@ function winGame() {
     clock.stop();
     endMessageDiv.textContent = `Congratulations!\nYou Reached the Black Hole!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}${isInvincible ? '\n(Invincible Mode)' : ''}`;
     endMessageDiv.style.display = 'block';
+    // Hide in-game buttons
+    pauseButton.style.display = 'none';
+    restartInGameButton.style.display = 'none';
     // Show only the restart options, hide speed/mode/start
     speedOptionsDiv.style.display = 'none';
     modeOptionsDiv.style.display = 'none';
@@ -1432,6 +1657,9 @@ function gameOver() {
     clock.stop();
     endMessageDiv.textContent = `Game Over!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}`;
     endMessageDiv.style.display = 'block';
+    // Hide in-game buttons
+    pauseButton.style.display = 'none';
+    restartInGameButton.style.display = 'none';
     // Show only the restart options, hide speed/mode/start
     speedOptionsDiv.style.display = 'none';
     modeOptionsDiv.style.display = 'none';
@@ -1443,7 +1671,15 @@ function gameOver() {
 }
 
 function animate() {
+    // Check game state *before* requesting next frame
     if (!gameActive) return;
+    if (isPaused) {
+        // If paused, still request the next frame so we can resume later
+        requestAnimationFrame(animate);
+        // Optional: render one more time to show pause state visually if needed
+        // renderer.render(scene, camera);
+        return;
+    }
 
     requestAnimationFrame(animate);
 
@@ -1527,17 +1763,56 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    checkAndUpdateControlsDisplay(); // Update controls text on resize
 }
 
 function onKeyDown(event) {
     keys[event.key.toLowerCase()] = true;
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' '].includes(event.key.toLowerCase())) {
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' ', 'p'].includes(event.key.toLowerCase())) { // Add 'p' for pause toggle
         event.preventDefault();
+    }
+    // Allow pausing with 'P' key
+    if (event.key.toLowerCase() === 'p' && gameActive) {
+        togglePause();
     }
 }
 
 function onKeyUp(event) {
     keys[event.key.toLowerCase()] = false;
+}
+
+function checkAndUpdateControlsDisplay() {
+    // Check if the arrow container is displayed (based on CSS media query)
+    const isMobileView = getComputedStyle(touchArrowsContainer).display !== 'none';
+    if (isMobileView) {
+        controlsElement.innerHTML = 'Controls:<br>Use D-Pad';
+    } else {
+        controlsElement.innerHTML = 'Controls:<br>Arrows/WASD';
+    }
+}
+
+function togglePause() {
+    if (!gameActive) return; // Can only pause active game
+
+    isPaused = !isPaused;
+
+    if (isPaused) {
+        clock.stop();
+        pauseButton.textContent = 'Resume';
+        pauseButton.classList.add('paused');
+        // Optional: Add a visual indicator like darkening the screen or showing text
+        // messageContainer.textContent = "Paused"; // Example, might conflict
+        // messageContainer.style.display = 'block';
+    } else {
+        clock.start(); // Resumes timing from where it stopped
+        pauseButton.textContent = 'Pause';
+        pauseButton.classList.remove('paused');
+        // Optional: Hide visual indicator
+        // messageContainer.style.display = 'none';
+
+        // Restart the animation loop explicitly
+        animate();
+    }
 }
 
 init();
