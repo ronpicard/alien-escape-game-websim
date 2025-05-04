@@ -1,0 +1,533 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #000;
+    overscroll-behavior: none; /* Prevent pull-to-refresh */
+}
+canvas {
+    display: block;
+}
+#title {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-family: 'Arial Black', Gadget, sans-serif;
+    font-size: 36px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+    z-index: 100;
+    white-space: nowrap; /* Prevent wrapping */
+    user-select: none; /* Prevent text selection */
+}
+#ui-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: auto;
+    text-align: left;
+    z-index: 100;
+    display: block;
+    color: white;
+    font-family: monospace;
+    font-size: 20px; /* Slightly reduced default size */
+    text-shadow: 1px 1px 2px black;
+    margin-top: 40px;
+    user-select: none; /* Prevent text selection */
+}
+#info, #coins, #speed {
+    margin-bottom: 5px;
+    font-size: inherit; /* Inherit from container */
+}
+#speed {
+    margin-bottom: 15px; /* Space before controls */
+}
+#controls {
+    color: yellow;
+    font-family: monospace;
+    font-size: 16px; /* Slightly smaller */
+    text-shadow: 1px 1px 2px black;
+    line-height: 1.4;
+    user-select: none; /* Prevent text selection */
+}
+#message-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 101;
+    display: block;
+    background-color: rgba(0, 0, 0, 0.65); /* Slightly darker */
+    padding: 25px;
+    border-radius: 10px;
+    text-align: center;
+    min-width: 300px; /* Adjusted min-width */
+    max-width: 90%; /* Ensure it doesn't exceed screen width */
+    box-sizing: border-box; /* Include padding in width calculation */
+}
+#start-options button,
+#speed-options button,
+#mode-options button {
+    font-family: monospace;
+    font-size: 18px; /* Smaller base size for buttons */
+    padding: 12px 24px;
+    margin: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    color: white;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    display: inline-block; /* Ensure wrapping works */
+}
+
+#speed-options button {
+    background-color: #2196F3; /* Blue color */
+}
+#speed-options button:hover {
+    background-color: #1e88e5;
+}
+#speed-options button.selected {
+    background-color: #64b5f6; /* Lighter blue */
+    border-color: #ffffff; /* White border when selected */
+}
+#speed-custom {
+    background-color: #9c27b0; /* Purple */
+}
+#speed-custom:hover {
+    background-color: #8e24aa;
+}
+#speed-custom.selected {
+    background-color: #ba68c8; /* Lighter purple */
+    border-color: #ffffff;
+}
+
+#custom-speed-input {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+#custom-speed-input label {
+    color: white;
+    font-family: monospace;
+    font-size: 14px;
+    margin-bottom: 0px;
+    display: block; /* Make labels block */
+    text-align: left;
+    width: 180px; /* Align labels */
+}
+#custom-speed-input input[type="number"] {
+    font-family: monospace;
+    font-size: 16px;
+    padding: 5px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    width: 80px; /* Fixed width for inputs */
+    text-align: right;
+    display: block; /* Make inputs block */
+    margin-left: auto; /* Push inputs to the right */
+    margin-right: auto;
+}
+#custom-speed-input div { /* Container for label + input */
+    display: flex;
+    justify-content: space-between; /* Space out label and input */
+    align-items: center;
+    width: 100%; /* Take full width of container */
+    max-width: 200px; /* Limit width */
+}
+#confirm-custom-speed {
+    font-family: monospace;
+    font-size: 16px;
+    padding: 8px 16px;
+    margin-top: 5px;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    background-color: #4CAF50; /* Green */
+    color: white;
+    transition: background-color 0.3s ease;
+}
+#confirm-custom-speed:hover {
+    background-color: #45a049;
+}
+#mode-options label,
+#speed-options label {
+    display: none; /* Hide the labels */
+    color: white;
+    font-family: monospace;
+    font-size: 20px;
+    margin-bottom: 10px;
+    user-select: none;
+}
+#mode-options {
+    margin-bottom: 15px;
+}
+#mode-options button {
+    background-color: #ff9800; /* Orange color */
+}
+#mode-options button:hover {
+    background-color: #fb8c00;
+}
+#mode-options button.selected {
+    background-color: #ffb74d; /* Lighter orange */
+    border-color: #ffffff;
+}
+
+#start-button-container {
+    margin-top: 15px;
+}
+#start-button {
+    font-family: 'Arial Black', Gadget, sans-serif;
+    font-size: 24px; /* Smaller start button */
+    padding: 15px 30px;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    background-color: #f44336; /* Red */
+    color: white;
+    transition: background-color 0.3s ease;
+    text-transform: uppercase;
+}
+#start-button:hover {
+    background-color: #e53935;
+}
+#start-options { /* Container for restart options */
+    margin-top: 15px; /* Add some space above */
+}
+#start-options button { /* Specifically style restart button */
+    background-color: #4CAF50; /* Green */
+}
+#start-options button:hover {
+    background-color: #45a049;
+}
+#end-message {
+    color: white;
+    font-family: monospace;
+    font-size: 20px; /* Reduced size */
+    text-align: center;
+    white-space: pre-wrap;
+    margin-bottom: 15px;
+    user-select: none;
+}
+#zone-display {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    color: white;
+    font-family: monospace;
+    font-size: 18px; /* Reduced size */
+    text-shadow: 1px 1px 2px black;
+    z-index: 100;
+    user-select: none;
+}
+#mode-display {
+    position: absolute;
+    top: 75px; /* Position below zone display */
+    right: 10px;
+    color: yellow;
+    font-family: monospace;
+    font-size: 16px; /* Reduced size */
+    text-shadow: 1px 1px 2px black;
+    z-index: 100;
+    user-select: none;
+}
+#escape-message {
+    position: absolute;
+    top: 95px; /* Position below mode display */
+    right: 10px;
+    color: #ff9800;
+    font-family: monospace;
+    font-size: 16px; /* Reduced size */
+    text-shadow: 1px 1px 2px black;
+    z-index: 100;
+    user-select: none;
+}
+
+/* Touch control overlay - invisible, covers screen */
+#touch-controls {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 50; /* Below UI, above canvas */
+    /* background-color: rgba(255, 0, 0, 0.1); /* DEBUG: Make visible */
+}
+
+/* Touch Arrow Controls */
+#touch-arrows-container {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+    z-index: 102;
+    opacity: 0.7;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: manipulation;
+}
+
+.touch-arrow {
+    background-color: rgba(128, 128, 128, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 24px; 
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+    box-sizing: border-box; 
+    -webkit-tap-highlight-color: transparent; 
+}
+
+.touch-arrow.active {
+    background-color: rgba(200, 200, 200, 0.8);
+    border-color: white;
+}
+
+#arrow-up { grid-area: 1 / 2 / 2 / 3; }
+#arrow-left { grid-area: 2 / 1 / 3 / 2; }
+#arrow-right { grid-area: 2 / 3 / 3 / 4; }
+#arrow-down { grid-area: 3 / 2 / 4 / 3; }
+
+/* In-Game Control Buttons */
+#pause-button,
+#shoot-button,
+#restart-ingame-button,
+#boost-button { 
+    position: absolute;
+    left: 15px;
+    width: 80px; 
+    padding: 8px 0; 
+    font-family: monospace;
+    font-size: 16px;
+    color: white;
+    border: 1px solid white;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 105; 
+    display: none; 
+    text-align: center;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+#restart-ingame-button {
+    bottom: 15px;
+    background-color: rgba(244, 67, 54, 0.8); 
+    border-color: rgba(255, 255, 255, 0.8);
+}
+#restart-ingame-button:hover {
+    background-color: rgba(229, 57, 53, 1.0); 
+    border-color: white;
+}
+
+#pause-button {
+    bottom: 65px; 
+    background-color: rgba(128, 128, 128, 0.8); 
+    border-color: rgba(255, 255, 255, 0.8);
+}
+#pause-button:hover {
+    background-color: rgba(100, 100, 100, 1.0); 
+    border-color: white;
+}
+#pause-button.paused {
+    background-color: rgba(76, 175, 80, 0.8); 
+}
+#pause-button.paused:hover {
+    background-color: rgba(67, 160, 71, 1.0); 
+}
+
+#shoot-button {
+    bottom: 115px; 
+    background-color: rgba(33, 150, 243, 0.8); 
+    border-color: rgba(255, 255, 255, 0.8);
+}
+#shoot-button:hover {
+    background-color: rgba(30, 136, 229, 1.0); 
+    border-color: white;
+}
+#shoot-button:active { 
+     background-color: rgba(25, 118, 210, 1.0);
+}
+
+#boost-button { 
+    bottom: 165px; 
+    background-color: rgba(255, 152, 0, 0.8); 
+    border-color: rgba(255, 255, 255, 0.8);
+}
+#boost-button:hover {
+    background-color: rgba(245, 124, 0, 1.0); 
+    border-color: white;
+}
+#boost-button.active { 
+    background-color: rgba(239, 108, 0, 1.0);
+    border-color: #ffff00; 
+}
+
+/* Media Query for smaller screens */
+@media (max-width: 768px) {
+    #title {
+        font-size: 28px;
+        top: 5px;
+    }
+    #ui-container {
+        font-size: 16px;
+        margin-top: 35px; 
+    }
+    #controls {
+        font-size: 14px;
+        line-height: 1.3;
+    }
+    #message-container {
+        padding: 15px;
+        min-width: 250px; 
+    }
+    #start-options button,
+    #speed-options button,
+    #mode-options button {
+        font-size: 16px;
+        padding: 10px 20px;
+        margin: 5px;
+    }
+    #speed-options label,
+    #mode-options label {
+        font-size: 18px;
+    }
+    #custom-speed-input label { font-size: 13px; width: auto; }
+    #custom-speed-input input[type="number"] { font-size: 14px; width: 60px;}
+    #custom-speed-input div { max-width: 180px; }
+    #confirm-custom-speed { font-size: 14px; padding: 6px 12px;}
+    #start-button {
+        font-size: 20px;
+        padding: 12px 25px;
+    }
+    #end-message {
+        font-size: 18px;
+    }
+    #zone-display {
+        font-size: 16px;
+        top: 40px;
+    }
+    #mode-display {
+        font-size: 14px;
+        top: 60px;
+    }
+    #escape-message {
+        font-size: 14px;
+        top: 80px;
+    }
+    #touch-arrows-container {
+        display: grid; 
+        bottom: 30px; 
+        right: 30px; 
+    }
+    #touch-controls {
+        display: none; 
+    }
+    #controls { 
+        line-height: 1.3;
+    }
+    #pause-button,
+    #shoot-button,
+    #restart-ingame-button,
+    #boost-button { 
+        left: 10px;
+        width: 70px;
+        font-size: 14px;
+        padding: 6px 0;
+    }
+     #restart-ingame-button { bottom: 10px; }
+     #pause-button { bottom: 55px; }
+     #shoot-button { bottom: 100px; }
+     #boost-button { bottom: 145px; } 
+}
+ @media (max-width: 480px) {
+    #title {
+        font-size: 20px;
+    }
+    #ui-container {
+        font-size: 12px;
+        margin-top: 30px;
+        left: 5px;
+    }
+    #controls {
+        font-size: 11px;
+        line-height: 1.3;
+    }
+    #zone-display {
+        font-size: 12px;
+        right: 5px;
+        top: 35px; 
+    }
+    #mode-display {
+        font-size: 11px;
+        top: 50px; 
+        right: 5px;
+    }
+    #escape-message {
+        font-size: 11px;
+        top: 65px; 
+        right: 5px;
+    }
+    #message-container {
+        padding: 10px;
+        min-width: 90%; 
+    }
+    #start-options button,
+    #speed-options button,
+    #mode-options button {
+        font-size: 14px;
+        padding: 8px 16px;
+        margin: 4px;
+    }
+    #custom-speed-input label { font-size: 12px; }
+    #custom-speed-input input[type="number"] { font-size: 12px; width: 50px;}
+    #custom-speed-input div { max-width: 160px; }
+    #confirm-custom-speed { font-size: 12px; padding: 5px 10px;}
+    #start-button {
+        font-size: 16px;
+        padding: 10px 20px;
+    }
+    #end-message {
+        font-size: 14px;
+    }
+    #touch-arrows-container {
+        bottom: 25px; 
+        right: 25px; 
+        width: 120px; 
+        height: 120px;
+    }
+    .touch-arrow {
+        width: 40px; 
+        height: 40px;
+        font-size: 18px; 
+    }
+    #pause-button,
+    #shoot-button,
+    #restart-ingame-button,
+    #boost-button { 
+        left: 8px;
+        width: 60px;
+        font-size: 12px;
+        padding: 5px 0;
+    }
+     #restart-ingame-button { bottom: 8px; }
+     #pause-button { bottom: 45px; }
+     #shoot-button { bottom: 82px; }
+     #boost-button { bottom: 119px; } 
+}
