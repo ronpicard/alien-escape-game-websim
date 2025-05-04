@@ -35,7 +35,7 @@ canvas {
     margin-top: 40px;
     user-select: none; /* Prevent text selection */
 }
-#info, #coins, #speed {
+#info, #coins, #speed, #timer {
     margin-bottom: 5px;
     font-size: inherit; /* Inherit from container */
 }
@@ -208,41 +208,60 @@ canvas {
 #end-message {
     color: white;
     font-family: monospace;
-    font-size: 20px; /* Reduced size */
+    font-size: 20px; 
     text-align: center;
     white-space: pre-wrap;
     margin-bottom: 15px;
     user-select: none;
+    font-weight: bold;
+    padding: 15px;
+    border-radius: 10px;
+    animation: pulsate 1.5s infinite alternate;
 }
+
+@keyframes pulsate {
+    from { background-color: rgba(244, 67, 54, 0.3); } 
+    to { background-color: rgba(244, 67, 54, 0.6); }
+}
+
+#end-message.win-message {
+    animation: win-pulsate 1.5s infinite alternate;
+}
+
+@keyframes win-pulsate {
+    from { background-color: rgba(76, 175, 80, 0.3); } 
+    to { background-color: rgba(76, 175, 80, 0.6); }
+}
+
 #zone-display {
     position: absolute;
     top: 50px;
     right: 10px;
     color: white;
     font-family: monospace;
-    font-size: 18px; /* Reduced size */
+    font-size: 18px; 
     text-shadow: 1px 1px 2px black;
     z-index: 100;
     user-select: none;
 }
 #mode-display {
     position: absolute;
-    top: 75px; /* Position below zone display */
+    top: 75px; 
     right: 10px;
     color: yellow;
     font-family: monospace;
-    font-size: 16px; /* Reduced size */
+    font-size: 16px; 
     text-shadow: 1px 1px 2px black;
     z-index: 100;
     user-select: none;
 }
 #escape-message {
     position: absolute;
-    top: 95px; /* Position below mode display */
+    top: 95px; 
     right: 10px;
     color: #ff9800;
     font-family: monospace;
-    font-size: 16px; /* Reduced size */
+    font-size: 16px; 
     text-shadow: 1px 1px 2px black;
     z-index: 100;
     user-select: none;
@@ -255,8 +274,7 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 50; /* Below UI, above canvas */
-    /* background-color: rgba(255, 0, 0, 0.1); /* DEBUG: Make visible */
+    z-index: 50; 
 }
 
 /* Touch Arrow Controls */
@@ -307,7 +325,8 @@ canvas {
 #pause-button,
 #shoot-button,
 #restart-ingame-button,
-#boost-button { 
+#boost-button, 
+#mute-button { 
     position: absolute;
     left: 15px;
     width: 80px; 
@@ -352,8 +371,14 @@ canvas {
     background-color: rgba(67, 160, 71, 1.0); 
 }
 
-#shoot-button {
+#mute-button {
     bottom: 115px; 
+    background-color: rgba(100, 100, 100, 0.8);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+#shoot-button {
+    bottom: 165px; 
     background-color: rgba(33, 150, 243, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -366,7 +391,7 @@ canvas {
 }
 
 #boost-button { 
-    bottom: 165px; 
+    bottom: 215px; 
     background-color: rgba(255, 152, 0, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -377,6 +402,18 @@ canvas {
 #boost-button.active { 
     background-color: rgba(239, 108, 0, 1.0);
     border-color: #ffff00; 
+}
+
+#mute-button:hover {
+    background-color: rgba(80, 80, 80, 1.0);
+    border-color: white;
+}
+
+#mute-button.muted {
+    background-color: rgba(244, 67, 54, 0.8); 
+}
+#mute-button.muted:hover {
+    background-color: rgba(229, 57, 53, 1.0);
 }
 
 /* Media Query for smaller screens */
@@ -392,6 +429,21 @@ canvas {
     #controls {
         font-size: 14px;
         line-height: 1.3;
+    }
+    #zone-display {
+        font-size: 16px;
+        right: 10px;
+        top: 40px; 
+    }
+    #mode-display {
+        font-size: 14px;
+        top: 60px; 
+        right: 10px;
+    }
+    #escape-message {
+        font-size: 14px;
+        top: 80px; 
+        right: 10px;
     }
     #message-container {
         padding: 15px;
@@ -419,18 +471,6 @@ canvas {
     #end-message {
         font-size: 18px;
     }
-    #zone-display {
-        font-size: 16px;
-        top: 40px;
-    }
-    #mode-display {
-        font-size: 14px;
-        top: 60px;
-    }
-    #escape-message {
-        font-size: 14px;
-        top: 80px;
-    }
     #touch-arrows-container {
         display: grid; 
         bottom: 30px; 
@@ -445,16 +485,25 @@ canvas {
     #pause-button,
     #shoot-button,
     #restart-ingame-button,
-    #boost-button { 
+    #boost-button, 
+    #mute-button { 
         left: 10px;
         width: 70px;
         font-size: 14px;
         padding: 6px 0;
     }
      #restart-ingame-button { bottom: 10px; }
-     #pause-button { bottom: 55px; }
-     #shoot-button { bottom: 100px; }
-     #boost-button { bottom: 145px; } 
+     #pause-button { bottom: 50px; }
+     #mute-button { bottom: 90px; }
+     #shoot-button { bottom: 130px; }
+     #boost-button { bottom: 170px; } 
+    #mute-button {
+        left: 10px;
+        bottom: 90px;
+        width: 70px;
+        font-size: 14px;
+        padding: 6px 0;
+    }
 }
  @media (max-width: 480px) {
     #title {
@@ -520,14 +569,23 @@ canvas {
     #pause-button,
     #shoot-button,
     #restart-ingame-button,
-    #boost-button { 
+    #boost-button, 
+    #mute-button { 
         left: 8px;
         width: 60px;
         font-size: 12px;
         padding: 5px 0;
     }
-     #restart-ingame-button { bottom: 8px; }
-     #pause-button { bottom: 45px; }
-     #shoot-button { bottom: 82px; }
-     #boost-button { bottom: 119px; } 
+     #restart-ingame-button { bottom: 8px; }  
+     #pause-button { bottom: 43px; }          
+     #mute-button { bottom: 78px; }           
+     #shoot-button { bottom: 113px; }         
+     #boost-button { bottom: 148px; }         
+    #mute-button {
+        left: 8px;
+        bottom: 78px;
+        width: 60px;
+        font-size: 12px;
+        padding: 5px 0;
+    }
 }
