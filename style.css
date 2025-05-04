@@ -39,9 +39,7 @@ canvas {
     margin-bottom: 5px;
     font-size: inherit; /* Inherit from container */
 }
-#speed {
-    margin-bottom: 15px; /* Space before controls */
-}
+
 #controls {
     color: yellow;
     font-family: monospace;
@@ -259,7 +257,7 @@ canvas {
     position: absolute;
     top: 95px; 
     right: 10px;
-    color: #ff9800;
+    color: yellow;
     font-family: monospace;
     font-size: 16px; 
     text-shadow: 1px 1px 2px black;
@@ -280,8 +278,8 @@ canvas {
 /* Touch Arrow Controls */
 #touch-arrows-container {
     position: absolute;
-    width: 150px;
-    height: 150px;
+    width: 187.5px;
+    height: 187.5px;
     display: none;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
@@ -293,6 +291,7 @@ canvas {
     -moz-user-select: none;
     -ms-user-select: none;
     touch-action: manipulation;
+    right: 15px; 
 }
 
 .touch-arrow {
@@ -303,7 +302,7 @@ canvas {
     justify-content: center;
     align-items: center;
     color: white;
-    font-size: 24px; 
+    font-size: 30px;
     font-weight: bold;
     cursor: pointer;
     transition: background-color 0.1s ease;
@@ -329,13 +328,13 @@ canvas {
 #mute-button { 
     position: absolute;
     left: 15px;
-    width: 80px; 
-    padding: 8px 0; 
+    width: 120px; 
+    padding: 12px 0; 
     font-family: monospace;
-    font-size: 16px;
+    font-size: 24px;
     color: white;
     border: 1px solid white;
-    border-radius: 5px;
+    border-radius: 8px; 
     cursor: pointer;
     z-index: 105; 
     display: none; 
@@ -346,7 +345,7 @@ canvas {
 }
 
 #restart-ingame-button {
-    bottom: 15px;
+    bottom: 255px;
     background-color: rgba(244, 67, 54, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -356,7 +355,7 @@ canvas {
 }
 
 #pause-button {
-    bottom: 65px; 
+    bottom: 195px; 
     background-color: rgba(128, 128, 128, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -372,13 +371,13 @@ canvas {
 }
 
 #mute-button {
-    bottom: 115px; 
+    bottom: 135px; 
     background-color: rgba(100, 100, 100, 0.8);
     border-color: rgba(255, 255, 255, 0.8);
 }
 
 #shoot-button {
-    bottom: 165px; 
+    bottom: 75px; 
     background-color: rgba(33, 150, 243, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -391,7 +390,7 @@ canvas {
 }
 
 #boost-button { 
-    bottom: 215px; 
+    bottom: 15px; 
     background-color: rgba(255, 152, 0, 0.8); 
     border-color: rgba(255, 255, 255, 0.8);
 }
@@ -474,7 +473,7 @@ canvas {
     #touch-arrows-container {
         display: grid; 
         bottom: 30px; 
-        right: 30px; 
+        right: 15px; 
     }
     #touch-controls {
         display: none; 
@@ -488,22 +487,15 @@ canvas {
     #boost-button, 
     #mute-button { 
         left: 10px;
-        width: 70px;
-        font-size: 14px;
-        padding: 6px 0;
+        width: 105px; 
+        font-size: 21px;
+        padding: 9px 0; 
     }
-     #restart-ingame-button { bottom: 10px; }
-     #pause-button { bottom: 50px; }
-     #mute-button { bottom: 90px; }
-     #shoot-button { bottom: 130px; }
-     #boost-button { bottom: 170px; } 
-    #mute-button {
-        left: 10px;
-        bottom: 90px;
-        width: 70px;
-        font-size: 14px;
-        padding: 6px 0;
-    }
+     #restart-ingame-button { bottom: 230px; }
+     #pause-button { bottom: 175px; }          
+     #mute-button { bottom: 120px; }           
+     #shoot-button { bottom: 65px; }         
+     #boost-button { bottom: 10px; }         
 }
  @media (max-width: 480px) {
     #title {
@@ -557,14 +549,14 @@ canvas {
     }
     #touch-arrows-container {
         bottom: 25px; 
-        right: 25px; 
-        width: 120px; 
-        height: 120px;
+        right: 10px; 
+        width: 150px; 
+        height: 150px;
     }
     .touch-arrow {
-        width: 40px; 
-        height: 40px;
-        font-size: 18px; 
+        width: 50px; 
+        height: 50px;
+        font-size: 22.5px; 
     }
     #pause-button,
     #shoot-button,
@@ -572,20 +564,13 @@ canvas {
     #boost-button, 
     #mute-button { 
         left: 8px;
-        width: 60px;
-        font-size: 12px;
-        padding: 5px 0;
+        width: 90px; 
+        font-size: 18px;
+        padding: 8px 0; 
     }
-     #restart-ingame-button { bottom: 8px; }  
-     #pause-button { bottom: 43px; }          
-     #mute-button { bottom: 78px; }           
-     #shoot-button { bottom: 113px; }         
-     #boost-button { bottom: 148px; }         
-    #mute-button {
-        left: 8px;
-        bottom: 78px;
-        width: 60px;
-        font-size: 12px;
-        padding: 5px 0;
-    }
+     #restart-ingame-button { bottom: 216px; }  
+     #pause-button { bottom: 164px; }          
+     #mute-button { bottom: 112px; }           
+     #shoot-button { bottom: 60px; }         
+     #boost-button { bottom: 8px; }
 }
