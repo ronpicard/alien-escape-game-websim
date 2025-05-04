@@ -19,8 +19,8 @@ let selectedModeIsInvincible = null;
 
 // --- Boost Variables ---
 let isBoosting = false;
-const boostMaxSpeedMultiplier = 2.0; // Increase max speed by 200%
-const boostAccelerationMultiplier = 3.0; // Accelerate faster when boosting
+const boostMaxSpeedMultiplier = 3; // Increase max speed by 200%
+const boostAccelerationMultiplier = 10; // Accelerate faster when boosting
 let boostSoundSource = null; // To keep track of the active boost sound node
 let boostOscillator = null;
 let boostGainNode = null;
@@ -30,7 +30,7 @@ let boostButtonPressed = false; // Track boost button state separately
 // --- Trail Particles ---
 const MAX_TRAIL_PARTICLES = 400; // Increased for density
 const TRAIL_LIFETIME = 0.15; // seconds - Much shorter lifetime
-const TRAIL_SPAWN_INTERVAL = 0.005; // seconds - Spawn much more frequently
+const TRAIL_SPAWN_INTERVAL = 0.0005; // seconds - Spawn much more frequently
 let trailParticles = [];
 let trailParticleGeometry;
 // Base trail particle material (will be cloned and color changed)
@@ -60,7 +60,7 @@ const planeHeight = 70; // Increased from 15 to allow higher movement
 // --- Cloud Density Increase ---
 const initialCloudCount = 60; // Was 15 (4x increase)
 const targetCloudCount = 80;  // Was 20 (4x increase)
-const cloudSpawnThreshold = 70; // Was 15 (Adjusted relative to new target: target - 10)
+const cloudSpawnThreshold = targetCloudCount - 10; // Was 15 (Adjusted relative to new target: target - 10)
 // --- End Cloud Density Increase ---
 const cloudSpawnDistance = 1500; 
 const cloudSpawnRangeZ = 1000; 
@@ -117,12 +117,20 @@ const COIN_PARTICLE_SIZE = 0.5; // Slightly larger size maybe
 const COIN_PARTICLE_COLOR = 0xffeb3b; // Yellowish gold
 
 const clock = new THREE.Clock();
+let gameStartTime = 0;
+let gameElapsedTime = 0;
+let lastTimerUpdate = 0;
+let timerActive = false;
+let finalGameTime = "";
+const timerElement = document.getElementById('timer');
 
 // --- NEW: Web Audio ---
 let audioContext;
 let audioBuffers = {}; // Cache for decoded audio buffers
 let currentMusicSource = null; // Track the currently playing music AudioBufferSourceNode
 let currentMusicZone = null; // Track the ID/name of the zone for the current music
+let masterGainNode; // Master gain node for muting
+let isMuted = false; // Mute state
 // --- END: Web Audio ---
 
 const controlsElement = document.getElementById('controls'); // Get controls display
@@ -157,6 +165,7 @@ const pauseButton = document.getElementById('pause-button');
 const restartInGameButton = document.getElementById('restart-ingame-button');
 const shootButton = document.getElementById('shoot-button'); // Get shoot button
 const boostButton = document.getElementById('boost-button'); // Get boost button
+const muteButton = document.getElementById('mute-button'); // Get mute button
 
 // --- Arrow Pad Elements ---
 const touchArrowsContainer = document.getElementById('touch-arrows-container');
@@ -216,6 +225,8 @@ function showStartScreen() {
     restartInGameButton.style.display = 'none';
     shootButton.style.display = 'none'; // Hide shoot button
     boostButton.style.display = 'none'; // Hide boost button
+    muteButton.style.display = 'none'; // Hide mute button
+
     // Reset pause state if returning here
     isPaused = false;
     pauseButton.textContent = 'Pause';
@@ -475,6 +486,10 @@ function init() {
              try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 console.log("AudioContext created.");
+                // Create Master Gain Node
+                masterGainNode = audioContext.createGain();
+                masterGainNode.gain.value = 1; // Start unmuted
+                masterGainNode.connect(audioContext.destination);
              } catch(e) {
                 console.error("Web Audio API is not supported in this browser", e);
              }
@@ -565,6 +580,11 @@ function init() {
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log("AudioContext initialized.");
+        // Create Master Gain Node
+        masterGainNode = audioContext.createGain();
+        masterGainNode.gain.value = 1; // Start unmuted
+        masterGainNode.connect(audioContext.destination);
+
         // Start suspended, requires user interaction to resume
         if (audioContext.state === 'suspended') {
             console.log("AudioContext is suspended. Waiting for user interaction.");
@@ -573,6 +593,9 @@ function init() {
         console.error("Web Audio API is not supported in this browser", e);
     }
     // --- End AudioContext Init ---
+
+    // Mute Button Listener
+    muteButton.addEventListener('click', toggleMute);
 
     showStartScreen(); // Show initial speed selection screen
 }
@@ -1260,6 +1283,11 @@ function startGame() {
         try {
              audioContext = new (window.AudioContext || window.webkitAudioContext)();
              console.log("AudioContext created on game start.");
+             // Create Master Gain Node
+             masterGainNode = audioContext.createGain();
+             masterGainNode.gain.value = 1; // Start unmuted
+             masterGainNode.connect(audioContext.destination);
+
              if (audioContext.state === 'suspended') {
                  audioContext.resume(); // Try immediate resume
              }
@@ -1346,11 +1374,18 @@ function startGame() {
     createInitialClouds();
 
     gameActive = true;
+    
+    // Initialize and start the timer
+    gameStartTime = Date.now();
+    lastTimerUpdate = gameStartTime;
+    timerActive = true;
+    gameElapsedTime = 0;
+    timerElement.textContent = "Time: 0:00";
+
     messageContainer.style.display = 'none';
     infoElement.textContent = `Height: 0 m`;
     coinsElement.textContent = `Coins: 0`;
     speedElement.textContent = `Speed: ${Math.floor(currentForwardSpeed)} m/s`;
-    zoneDisplayElement.textContent = 'Zone: Initializing...'; // Placeholder
     updateZoneDisplay(score);
 
     // Set and show mode display text
@@ -1368,12 +1403,17 @@ function startGame() {
     restartInGameButton.style.display = 'block';
     shootButton.style.display = 'block'; // Show shoot button
     boostButton.style.display = 'block'; // Show boost button
+    muteButton.style.display = 'block'; // Show mute button
 
     // Update boost button hint text based on selected max speed (in case it wasn't set before)
     if (boostButton && selectedSpeedSetting) {
         const potentialBoostMaxSpeed = selectedSpeedSetting.max * boostMaxSpeedMultiplier;
         boostButton.title = `Boost (Up to ${potentialBoostMaxSpeed.toFixed(0)} m/s)`;
     }
+
+    ufo.visible = true;
+    ufo.position.set(0, 5, 0); 
+    ufo.rotation.set(0, 0, 0);
 
     clock.start();
     animate();
@@ -1868,13 +1908,10 @@ function animate() {
         currentForwardSpeed = Math.min(currentForwardSpeed, currentMaxSpeed);
     } else if (currentForwardSpeed > currentMaxSpeed) {
         // If not boosting and speed is higher than normal max, decelerate naturally
-        // Apply a slight deceleration or let it cap naturally
-        // Option 1: Gradual deceleration towards normal max
-        const deccel = selectedAcceleration * 1.5; // Decelerate slightly faster than normal accel
+        // Apply a deceleration rate equal to the boost acceleration rate
+        const deccel = selectedAcceleration * boostAccelerationMultiplier; // Decelerate at same rate as boost acceleration
         currentForwardSpeed -= deccel * clampedDelta;
         currentForwardSpeed = Math.max(currentForwardSpeed, currentMaxSpeed); // Don't go below normal max
-        // Option 2: Cap instantly (might feel abrupt)
-        // currentForwardSpeed = currentMaxSpeed;
     }
     // --- End Speed Update Logic ---
 
@@ -1949,6 +1986,8 @@ function animate() {
         }
         // --- End Fallback ---
     }
+
+    updateGameTimer();
 
     renderer.render(scene, camera);
 }
@@ -2226,8 +2265,23 @@ function winGame() {
     clock.stop();
     stopCurrentMusic(); // Stop music on win
     stopBoostSound(); // Ensure boost sound is stopped
-    endMessageDiv.textContent = `Congratulations!\nYou Reached the Black Hole!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}${isInvincible ? '\n(Invincible Mode)' : ''}`;
-    // ... rest of winGame UI updates ...
+    stopGameTimer();
+    
+    // Add win-message class for styling
+    endMessageDiv.className = 'win-message';
+    
+    // Update the end message with more emphasis
+    endMessageDiv.textContent = `VICTORY!\nYou Reached the Black Hole!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}\nTime: ${finalGameTime}${isInvincible ? '\n(Invincible Mode)' : ''}`;
+    
+    // Show message container with restart options
+    messageContainer.style.display = 'block';
+    startOptionsDiv.style.display = 'block';
+    endMessageDiv.style.display = 'block';
+    
+    // Play a victory sound if audio is available
+    if (audioContext && audioContext.state === 'running') {
+        playVictorySound();
+    }
 }
 
 // Function to handle game over
@@ -2237,13 +2291,29 @@ function gameOver() {
     clock.stop();
     stopCurrentMusic(); // Stop music on game over
     stopBoostSound(); // Ensure boost sound is stopped
+    stopGameTimer();
+    
     // Create explosion at UFO's last position
     createExplosion(ufo.position);
-    // Hide UFO visually
-    ufo.visible = false; // Or scene.remove(ufo); if! preferred
-
-    endMessageDiv.textContent = `Game Over!\nScore: ${Math.floor(score)}\nCoins: ${coinCount}`;
-    // ... rest of gameOver UI updates ...
+    
+    // Do not hide UFO visually
+    // ufo.visible = false;  // Removed
+    
+    // Remove any win-message class and ensure default styling
+    endMessageDiv.className = '';
+    
+    // Update the end message with more emphasis
+    endMessageDiv.textContent = `GAME OVER!\nYour flight has ended.\nScore: ${Math.floor(score)}\nCoins: ${coinCount}\nTime: ${finalGameTime}`;
+    
+    // Show message container with restart options
+    messageContainer.style.display = 'block';
+    startOptionsDiv.style.display = 'block';
+    endMessageDiv.style.display = 'block';
+    
+    // Play defeat sound if audio is available
+    if (audioContext && audioContext.state === 'running') {
+        playDefeatSound();
+    }
 }
 
 // Function to update Trail
@@ -2619,9 +2689,8 @@ function checkAndUpdateControlsDisplay() {
     // Check if the arrow container is displayed (based on CSS media query)
     const isMobileView = getComputedStyle(touchArrowsContainer).display !== 'none';
     if (isMobileView) {
-        controlsElement.innerHTML = 'Controls:<br>Use D-Pad & Buttons'; // Update text slightly
+        controlsElement.innerHTML = 'Controls:<br>Use D-Pad & Buttons<br>Boost=Shift & Shoot=Space';
     } else {
-        // Add Shift to controls display for keyboard
         controlsElement.innerHTML = 'Controls:<br>Arrows/WASD + Shoot/Space<br>Boost: Shift';
     }
 }
@@ -2636,6 +2705,7 @@ function togglePause() {
         clock.stop();
         pauseButton.textContent = 'Resume';
         pauseButton.classList.add('paused');
+        
         // Stop boost sound if game is paused while boosting
         if (isBoosting) { // Check actual boosting state
             stopBoostSound(); // Stop sound immediately when pausing
@@ -2654,6 +2724,9 @@ function togglePause() {
             audioContext.resume().then(() => {
                  console.log("AudioContext resumed.");
                  // Re-evaluate boost state upon unpausing AFTER audio context is resumed
+                 if (masterGainNode) {
+                    masterGainNode.gain.value = isMuted ? 0 : 1;
+                 }
                  checkAndUpdateBoostState();
                  // Music will resume automatically if suspend/resume is used
             });
@@ -2690,12 +2763,16 @@ function checkAndUpdateBoostState() {
 }
 
 function playBoostSound() {
-     if (!audioContext || audioContext.state !== 'running') {
-        if (audioContext && audioContext.state === 'suspended') {
+     if (!audioContext || !masterGainNode) {
+        console.warn("AudioContext/MasterGain not available, cannot play boost sound.");
+        return;
+     }
+      if (audioContext.state !== 'running') {
+        if (audioContext.state === 'suspended') {
             audioContext.resume().catch(err => console.warn("Could not resume audio context for boost sound:", err));
             // Attempt to play immediately after resume request, hoping it succeeds quickly
         } else {
-            console.warn("AudioContext not available or running, cannot play boost sound.");
+            console.warn("AudioContext not running, cannot play boost sound.");
             return;
         }
     }
@@ -2707,7 +2784,7 @@ function playBoostSound() {
     boostGainNode = audioContext.createGain();
 
     boostOscillator.connect(boostGainNode);
-    boostGainNode.connect(audioContext.destination);
+    boostGainNode.connect(masterGainNode); // Connect to MASTER gain
 
     // Sound Parameters - Low hum/rumble
     boostOscillator.type = 'sawtooth'; // Sawtooth or square for a richer sound
@@ -2739,20 +2816,15 @@ function stopBoostSound() {
 }
 
 function playCoinSound() {
-    if (!audioContext || audioContext.state !== 'running') {
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume().catch(err => console.warn("Could not resume audio context for coin sound:", err));
-            // Attempt to play immediately after resume request, hoping it succeeds quickly
-        } else {
-            console.warn("AudioContext not available or running, cannot play coin sound.");
-            return;
-        }
+    if (!audioContext || !masterGainNode) {
+        console.warn("AudioContext/MasterGain not available, cannot play coin sound.");
+        return;
     }
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 
     oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(masterGainNode); // Connect to MASTER gain
 
     // Sound Parameters - "Ching" sound
     oscillator.type = 'triangle'; // Triangle or Sine wave for a purer tone
@@ -2778,7 +2850,7 @@ function playCoinSound() {
 }
 
 function playLaserSound() {
-    if (!audioContext || audioContext.state !== 'running') {
+    if (!audioContext || !masterGainNode) {
         // Attempt to resume if suspended, otherwise log warning/error
         if(audioContext && audioContext.state === 'suspended') {
              audioContext.resume().catch(err => console.warn("Could not resume audio context for sound:", err));
@@ -2795,7 +2867,7 @@ function playLaserSound() {
     const gainNode = audioContext.createGain();
 
     oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(masterGainNode); // Connect to MASTER gain
 
     // Sound Parameters - "Pew" sound
     oscillator.type = 'sawtooth'; // Sawtooth gives a buzzy sound
@@ -2822,6 +2894,114 @@ function playLaserSound() {
 
     oscillator.start(now);
     oscillator.stop(now + totalDuration + 0.05); // Stop oscillator slightly after gain reaches zero
+}
+
+function toggleMute() {
+    if (!audioContext || !masterGainNode) return; // Need audio context and gain node
+
+    isMuted = !isMuted;
+
+    if (isMuted) {
+        masterGainNode.gain.value = 0; // Mute
+        muteButton.textContent = 'Unmute';
+        muteButton.classList.add('muted');
+        console.log("Audio Muted");
+    } else {
+        masterGainNode.gain.value = 1; // Unmute (set to full volume, could be adjusted later)
+        muteButton.textContent = 'Mute';
+        muteButton.classList.remove('muted');
+        console.log("Audio Unmuted");
+        // Ensure context is running if we unmute
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+    }
+}
+
+function stopCurrentMusic() {
+    if (currentMusicSource) {
+        try {
+            currentMusicSource.stop();
+        } catch (e) {
+            // Ignore errors if source already stopped
+        }
+        currentMusicSource = null;
+    }
+    currentMusicZone = null; // Reset zone tracker
+    // console.log("Music stopped."); // Debug
+}
+
+async function loadAndPlayMusic(url, zoneId) {
+    if (!audioContext || !masterGainNode) {
+        console.warn(`AudioContext/MasterGain not ready. Cannot play music for zone ${zoneId}`);
+        return;
+    }
+    if (!url) {
+        console.warn(`No music URL provided for zone ${zoneId}`);
+        return;
+    }
+
+    // Mark the zone we are *trying* to play music for
+    currentMusicZone = zoneId;
+
+    try {
+        let buffer;
+        if (audioBuffers[url]) {
+            // Use cached buffer
+            buffer = audioBuffers[url];
+            // console.log(`Using cached audio buffer for ${url}`); // Debug
+        } else {
+            // Fetch and decode
+            // console.log(`Fetching audio buffer for ${url}`); // Debug
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status} for ${url}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            buffer = await audioContext.decodeAudioData(arrayBuffer);
+            audioBuffers[url] = buffer; // Cache the decoded buffer
+            // console.log(`Decoded and cached audio buffer for ${url}`); // Debug
+        }
+
+        // Double-check if the zone changed *while* we were loading/decoding
+        if (currentMusicZone !== zoneId) {
+             console.log(`Zone changed to ${currentMusicZone} while loading ${zoneId}. Aborting playback.`); // Debug
+             return; // Don't play if the zone target changed
+        }
+
+        // Stop any existing music source just before playing new one (belt-and-suspenders)
+        if (currentMusicSource) {
+            try { currentMusicSource.stop(); } catch(e) {}
+        }
+
+        // Create source node
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        // Optional: Add a gain node for volume control if needed later
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.35; // Set music volume (adjust 0.0 to 1.0)
+        source.connect(gainNode);
+        gainNode.connect(masterGainNode); // Connect music gain to MASTER gain
+
+        source.start(0); // Start playback immediately
+        currentMusicSource = source; // Store the reference to the playing source
+        // console.log(`Playing music for zone ${zoneId}: ${url}`); // Debug
+
+        // Handle cleanup if the source finishes unexpectedly (e.g., disconnected)
+        source.onended = () => {
+            // Only clear if this *specific* source instance ended
+            if (currentMusicSource === source) {
+                 currentMusicSource = null;
+                 // Don't reset currentMusicZone here, as the game might still be in that zone
+                 // console.log(`Music source ended for zone ${zoneId}`); // Debug
+            }
+        };
+
+    } catch (error) {
+        console.error(`Error loading or playing music ${url}:`, error);
+        currentMusicZone = null; // Reset zone if loading failed
+    }
 }
 
 function createMountain() {
@@ -2943,94 +3123,104 @@ function createBuilding() {
     return group;
 }
 
-function stopCurrentMusic() {
-    if (currentMusicSource) {
-        try {
-            currentMusicSource.stop();
-        } catch (e) {
-            // Ignore errors if source already stopped
-        }
-        currentMusicSource = null;
+function updateGameTimer() {
+    if (!timerActive) return;
+    
+    const now = Date.now();
+    // Only update display every 100ms to reduce DOM updates
+    if (now - lastTimerUpdate >= 100) {
+        gameElapsedTime = (now - gameStartTime) / 1000; // Convert to seconds
+        
+        // Format time as minutes:seconds
+        const minutes = Math.floor(gameElapsedTime / 60);
+        const seconds = Math.floor(gameElapsedTime % 60);
+        const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        timerElement.textContent = `Time: ${formattedTime}`;
+        lastTimerUpdate = now;
     }
-    currentMusicZone = null; // Reset zone tracker
-    // console.log("Music stopped."); // Debug
 }
 
-async function loadAndPlayMusic(url, zoneId) {
-    if (!audioContext || audioContext.state !== 'running') {
-        console.warn(`AudioContext not ready. Cannot play music for zone ${zoneId}`);
-        // Attempt to resume if suspended, but don't wait here
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-        return;
-    }
-    if (!url) {
-        console.warn(`No music URL provided for zone ${zoneId}`);
-        return;
-    }
+function stopGameTimer() {
+    if (!timerActive) return;
+    
+    timerActive = false;
+    
+    // Calculate final time
+    const totalSeconds = Math.floor(gameElapsedTime);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    finalGameTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
-    // Mark the zone we are *trying* to play music for
-    currentMusicZone = zoneId;
+// Add sound for victory
+function playVictorySound() {
+    if (!audioContext || !masterGainNode) return;
+    
+    const oscillator1 = audioContext.createOscillator();
+    const oscillator2 = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator1.connect(gainNode);
+    oscillator2.connect(gainNode);
+    gainNode.connect(masterGainNode);
+    
+    // Triumphant sound
+    oscillator1.type = 'sine';
+    oscillator2.type = 'triangle';
+    
+    const now = audioContext.currentTime;
+    
+    // First note
+    oscillator1.frequency.setValueAtTime(440, now); // A4
+    oscillator2.frequency.setValueAtTime(440 * 1.25, now); // Major third up
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.4, now + 0.1);
+    
+    // Second note (higher)
+    oscillator1.frequency.setValueAtTime(523.25, now + 0.3); // C5
+    oscillator2.frequency.setValueAtTime(523.25 * 1.25, now + 0.3);
+    
+    // Final chord
+    oscillator1.frequency.setValueAtTime(659.25, now + 0.6); // E5
+    oscillator2.frequency.setValueAtTime(880, now + 0.6); // A5
+    
+    // Fade out
+    gainNode.gain.setValueAtTime(0.4, now + 0.9);
+    gainNode.gain.linearRampToValueAtTime(0, now + 1.5);
+    
+    oscillator1.start(now);
+    oscillator2.start(now);
+    oscillator1.stop(now + 1.5);
+    oscillator2.stop(now + 1.5);
+}
 
-    try {
-        let buffer;
-        if (audioBuffers[url]) {
-            // Use cached buffer
-            buffer = audioBuffers[url];
-            // console.log(`Using cached audio buffer for ${url}`); // Debug
-        } else {
-            // Fetch and decode
-            // console.log(`Fetching audio buffer for ${url}`); // Debug
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status} for ${url}`);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            buffer = await audioContext.decodeAudioData(arrayBuffer);
-            audioBuffers[url] = buffer; // Cache the decoded buffer
-            // console.log(`Decoded and cached audio buffer for ${url}`); // Debug
-        }
-
-        // Double-check if the zone changed *while* we were loading/decoding
-        if (currentMusicZone !== zoneId) {
-             console.log(`Zone changed to ${currentMusicZone} while loading ${zoneId}. Aborting playback.`); // Debug
-             return; // Don't play if the zone target changed
-        }
-
-        // Stop any existing music source just before playing new one (belt-and-suspenders)
-        if (currentMusicSource) {
-            try { currentMusicSource.stop(); } catch(e) {}
-        }
-
-        // Create source node
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        // Optional: Add a gain node for volume control if needed later
-        const gainNode = audioContext.createGain();
-        gainNode.gain.value = 0.35; // Set music volume (adjust 0.0 to 1.0)
-        source.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        source.start(0); // Start playback immediately
-        currentMusicSource = source; // Store the reference to the playing source
-        // console.log(`Playing music for zone ${zoneId}: ${url}`); // Debug
-
-        // Handle cleanup if the source finishes unexpectedly (e.g., disconnected)
-        source.onended = () => {
-            // Only clear if this *specific* source instance ended
-            if (currentMusicSource === source) {
-                 currentMusicSource = null;
-                 // Don't reset currentMusicZone here, as the game might still be in that zone
-                 // console.log(`Music source ended for zone ${zoneId}`); // Debug
-            }
-        };
-
-    } catch (error) {
-        console.error(`Error loading or playing music ${url}:`, error);
-        currentMusicZone = null; // Reset zone if loading failed
-    }
+// Add sound for defeat
+function playDefeatSound() {
+    if (!audioContext || !masterGainNode) return;
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(masterGainNode);
+    
+    // Sad sound
+    oscillator.type = 'sawtooth';
+    
+    const now = audioContext.currentTime;
+    
+    // Start with higher note and descend
+    oscillator.frequency.setValueAtTime(220, now); // A3
+    oscillator.frequency.linearRampToValueAtTime(110, now + 0.5); // A2
+    
+    // Volume envelope
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+    
+    oscillator.start(now);
+    oscillator.stop(now + 1.0);
 }
 
 init();
