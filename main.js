@@ -603,8 +603,9 @@ function init() {
     // The actual playback will happen when boosting starts.
     // This helps reduce delay on the first boost.
    
-    preloadSound('./boost_sound.mp3');
-    preloadSound('./explosion.mp3');
+    preloadSound('boost_sound.mp3');
+    preloadSound('explosion.mp3');
+
 
     // --- End Preload ---
 }
