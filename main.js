@@ -602,9 +602,9 @@ function init() {
     // We initiate the loading here, but don't play it.
     // The actual playback will happen when boosting starts.
     // This helps reduce delay on the first boost.
-    preloadSound('/boost_sound.mp3');
+    preloadSound('boost_sound.mp3');
     // --- Preload Explosion Sound ---
-    preloadSound('/explosion.mp3');
+    preloadSound('explosion.mp3');
     // --- End Preload ---
 }
 
@@ -2776,7 +2776,7 @@ function checkAndUpdateBoostState() {
 async function playBoostSound() {
     if (!audioContext || !masterGainNode || isMuted) return; // Don't play if muted
 
-    const url = '/boost_sound.mp3';
+    const url = 'boost_sound.mp3';
 
     try {
         let buffer;
@@ -3284,7 +3284,7 @@ function playDefeatSound() {
 async function playExplosionSound() {
     if (!audioContext || !masterGainNode || isMuted) return; // Don't play if muted or context not ready
 
-    const url = '/explosion.mp3';
+    const url = 'explosion.mp3';
 
     // Ensure context is running
      if (audioContext.state === 'suspended') {
