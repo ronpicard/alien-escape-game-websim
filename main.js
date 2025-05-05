@@ -602,11 +602,9 @@ function init() {
     // We initiate the loading here, but don't play it.
     // The actual playback will happen when boosting starts.
     // This helps reduce delay on the first boost.
-   
-    preloadSound('boost_sound.mp3');
-    preloadSound('explosion.mp3');
-
-
+    preloadSound('/boost_sound.mp3');
+    // --- Preload Explosion Sound ---
+    preloadSound('/explosion.mp3');
     // --- End Preload ---
 }
 
@@ -3026,10 +3024,6 @@ async function loadAndPlayMusic(url, zoneId) {
 
 // --- NEW: Helper function to preload sounds ---
 async function preloadSound(url) {
-    // Determine correct base path for GitHub Pages
-    const basePath = window.location.pathname.replace(/\/[^/]*$/, '/');
-    const fullUrl = basePath + url;
-
     // Check if context exists and is running, if not, try to initialize
     if (!audioContext) {
         try {
@@ -3037,26 +3031,32 @@ async function preloadSound(url) {
             masterGainNode = audioContext.createGain();
             masterGainNode.gain.value = isMuted ? 0 : 1; // Initialize based on mute state
             masterGainNode.connect(audioContext.destination);
-            if (audioContext.state === 'suspended') {
+             if (audioContext.state === 'suspended') {
                 console.log("AudioContext suspended during preload.");
-            }
+             }
         } catch (e) {
             console.error("Web Audio API is not supported. Cannot preload sound.");
-            return;
+            return; // Stop preloading if context fails
         }
     }
-
-    if (audioBuffers[url]) return;
+    // Don't preload if already cached
+    if (audioBuffers[url]) {
+        return;
+    }
 
     try {
-        const response = await fetch(fullUrl);
+        // console.log(`Preloading sound: ${url}`); // Debug
+        const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status} for ${fullUrl}`);
+            throw new Error(`HTTP error! status: ${response.status} for ${url}`);
         }
         const arrayBuffer = await response.arrayBuffer();
+        // Decode and cache
         audioBuffers[url] = await audioContext.decodeAudioData(arrayBuffer);
+        // console.log(`Sound ${url} preloaded and cached.`); // Debug
     } catch (error) {
         console.error(`Error preloading sound ${url}:`, error);
+        // Clear cache entry if preload failed
         delete audioBuffers[url];
     }
 }
